@@ -1,4 +1,10 @@
 import type { AgentConfig } from '../vault/types.js';
+import type { SpendStore } from '../db/spend-store.js';
+
+interface RulesEngineOptions {
+  spendStore?: SpendStore;
+  agentName?: string;
+}
 
 export interface TxRequest {
   type: 'deploy' | 'write' | 'transfer' | 'read' | 'simulate';
@@ -25,9 +31,13 @@ interface SpendRecord {
 export class RulesEngine {
   private config: AgentConfig;
   private spendHistory: Map<number, SpendRecord[]> = new Map(); // chain_id -> records
+  private spendStore: SpendStore | null;
+  private agentName: string;
 
-  constructor(config: AgentConfig) {
+  constructor(config: AgentConfig, options?: RulesEngineOptions) {
     this.config = config;
+    this.spendStore = options?.spendStore ?? null;
+    this.agentName = options?.agentName ?? config.name;
   }
 
   checkTxRequest(request: TxRequest): RuleResult {
@@ -71,9 +81,13 @@ export class RulesEngine {
   }
 
   recordSpend(chainId: number, amount: number): void {
-    const records = this.spendHistory.get(chainId) || [];
-    records.push({ amount, timestamp: Date.now() });
-    this.spendHistory.set(chainId, records);
+    if (this.spendStore) {
+      this.spendStore.record(this.agentName, chainId, amount);
+    } else {
+      const records = this.spendHistory.get(chainId) || [];
+      records.push({ amount, timestamp: Date.now() });
+      this.spendHistory.set(chainId, records);
+    }
   }
 
   private checkContractRules(address: string): RuleResult {
@@ -140,6 +154,9 @@ export class RulesEngine {
   }
 
   private getSpentSince(chainId: number, since: number): number {
+    if (this.spendStore) {
+      return this.spendStore.getSpentSince(this.agentName, chainId, since);
+    }
     const records = this.spendHistory.get(chainId) || [];
     return records
       .filter((r) => r.timestamp >= since)
