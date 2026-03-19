@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, formatEther, formatGwei, type PublicClient } from 'viem';
+import { createPublicClient, createWalletClient, http, formatEther, formatGwei, defineChain, type PublicClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import type {
   ChainAdapter,
@@ -102,10 +102,21 @@ export class EvmAdapter implements ChainAdapter {
     };
   }
 
+  private getChain() {
+    return defineChain({
+      id: this.chainId,
+      name: `Chain ${this.chainId}`,
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: { default: { http: [this.rpcUrl] } },
+    });
+  }
+
   async deployContract(params: DeployParams): Promise<{ hash: string; address?: string }> {
     const account = privateKeyToAccount(params.privateKey as `0x${string}`);
+    const chain = this.getChain();
     const walletClient = createWalletClient({
       account,
+      chain,
       transport: http(this.rpcUrl),
     });
 
@@ -114,6 +125,7 @@ export class EvmAdapter implements ChainAdapter {
       bytecode: params.bytecode as `0x${string}`,
       args: params.args || [],
       account,
+      chain,
     });
 
     // Wait for receipt to get contract address
@@ -127,8 +139,10 @@ export class EvmAdapter implements ChainAdapter {
 
   async writeContract(params: WriteContractParams): Promise<{ hash: string }> {
     const account = privateKeyToAccount(params.privateKey as `0x${string}`);
+    const chain = this.getChain();
     const walletClient = createWalletClient({
       account,
+      chain,
       transport: http(this.rpcUrl),
     });
 
@@ -138,6 +152,7 @@ export class EvmAdapter implements ChainAdapter {
       functionName: params.functionName,
       args: params.args,
       account,
+      chain,
       value: params.value ? BigInt(params.value) : undefined,
     });
 
