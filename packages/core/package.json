@@ -1,0 +1,16 @@
+{
+  "name": "@chainvault/core",
+  "version": "0.1.0",
+  "description": "ChainVault MCP core server and modules",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.0",
+    "viem": "^2.30.0",
+    "zod": "^3.25.0"
+  }
+}
