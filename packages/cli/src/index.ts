@@ -61,4 +61,13 @@ agentCmd
     console.log(result);
   });
 
-program.parse();
+if (process.argv.length <= 2) {
+  // No command args: launch TUI
+  const { render } = await import('ink');
+  const React = await import('react');
+  const { App } = await import('./tui/App.js');
+  const basePath = process.env.CHAINVAULT_PATH || DEFAULT_PATH;
+  render(React.createElement(App, { basePath }));
+} else {
+  program.parse();
+}
