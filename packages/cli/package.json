@@ -1,0 +1,23 @@
+{
+  "name": "@chainvault/cli",
+  "version": "0.1.0",
+  "description": "ChainVault MCP CLI and TUI",
+  "type": "module",
+  "bin": {
+    "chainvault": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@chainvault/core": "*",
+    "ink": "^5.2.0",
+    "react": "^18.3.0",
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0"
+  }
+}
