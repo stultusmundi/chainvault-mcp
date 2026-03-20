@@ -21,8 +21,19 @@ export { RulesEngine } from './rules/engine.js';
 export type { TxRequest, ApiRequest, RuleResult } from './rules/engine.js';
 
 // Chain
-export { EvmAdapter } from './chain/evm-adapter.js';
+export { EvmAdapter, buildTransport } from './chain/evm-adapter.js';
 export type { ChainAdapter } from './chain/types.js';
+export {
+  SUPPORTED_CHAINS,
+  getChainConfig,
+  getSupportedChainIds,
+  getTestnetChains,
+  getMainnetChains,
+  getChainsWithFaucets,
+} from './chain/chains.js';
+export type { ChainConfig, FaucetConfig } from './chain/chains.js';
+export { requestFaucet, getFaucetInfo } from './chain/faucet.js';
+export type { FaucetResult } from './chain/faucet.js';
 
 // Proxy
 export { ApiProxy } from './proxy/api-proxy.js';

@@ -29,6 +29,8 @@ vi.mock('viem', async () => {
       getGasPrice: vi.fn(async () => 30000000000n),
     })),
     http: vi.fn(() => 'http-transport'),
+    webSocket: vi.fn(() => 'ws-transport'),
+    fallback: vi.fn((...args: any[]) => 'fallback-transport'),
   };
 });
 
@@ -91,5 +93,42 @@ describe('EvmAdapter - Read Operations', () => {
     expect(estimate.gasLimit).toBeDefined();
     expect(estimate.gasPriceGwei).toBeDefined();
     expect(estimate.estimatedCostEth).toBeDefined();
+  });
+});
+
+describe('EvmAdapter.fromChainId', () => {
+  it('creates adapter for a known chain', () => {
+    const adapter = EvmAdapter.fromChainId(1);
+    expect(adapter.chainId).toBe(1);
+    expect(adapter.getChainInfo()).toBeDefined();
+    expect(adapter.getChainInfo()!.name).toBe('Ethereum Mainnet');
+  });
+
+  it('creates adapter for Sepolia testnet', () => {
+    const adapter = EvmAdapter.fromChainId(11155111);
+    expect(adapter.chainId).toBe(11155111);
+    expect(adapter.getChainInfo()!.network).toBe('testnet');
+  });
+
+  it('throws for unknown chain without custom RPC', () => {
+    expect(() => EvmAdapter.fromChainId(999999)).toThrow('not in the supported chain registry');
+  });
+
+  it('uses custom RPC URL when provided', () => {
+    const adapter = EvmAdapter.fromChainId(999999, 'https://custom-rpc.example.com');
+    expect(adapter.chainId).toBe(999999);
+  });
+
+  it('custom RPC overrides registry for known chain', () => {
+    const adapter = EvmAdapter.fromChainId(1, 'https://my-private-rpc.com');
+    expect(adapter.chainId).toBe(1);
+    expect(adapter.getChainInfo()).toBeDefined();
+  });
+
+  it('uses fallback transport for registry chains with WebSocket', async () => {
+    const { fallback: fallbackFn } = await import('viem');
+    const adapter = EvmAdapter.fromChainId(1);
+    // fallback should have been called since Ethereum has WS URLs
+    expect(fallbackFn).toHaveBeenCalled();
   });
 });

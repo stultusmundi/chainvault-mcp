@@ -32,5 +32,9 @@ describe('ChainVaultServer', () => {
 
     // Compiler tools
     expect(toolNames).toContain('compile_contract');
+
+    // Chain registry tools
+    expect(toolNames).toContain('list_supported_chains');
+    expect(toolNames).toContain('request_faucet');
   });
 });

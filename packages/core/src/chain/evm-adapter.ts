@@ -1,5 +1,6 @@
-import { createPublicClient, createWalletClient, http, formatEther, formatGwei, defineChain, type PublicClient } from 'viem';
+import { createPublicClient, createWalletClient, http, webSocket, fallback, formatEther, formatGwei, defineChain, type PublicClient, type Transport } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { getChainConfig, type ChainConfig } from './chains.js';
 import type {
   ChainAdapter,
   BalanceResult,
@@ -14,10 +15,28 @@ import type {
   WriteContractParams,
 } from './types.js';
 
+/**
+ * Builds a viem transport with WebSocket priority and HTTP fallback.
+ * If no WebSocket URLs are available, uses HTTP only.
+ */
+export function buildTransport(chainConfig: ChainConfig): Transport {
+  const httpTransports = chainConfig.rpcUrls.http.map((url) => http(url));
+
+  if (chainConfig.rpcUrls.websocket && chainConfig.rpcUrls.websocket.length > 0) {
+    const wsTransports = chainConfig.rpcUrls.websocket.map((url) => webSocket(url));
+    return fallback([...wsTransports, ...httpTransports]);
+  }
+
+  return httpTransports.length === 1
+    ? httpTransports[0]
+    : fallback(httpTransports);
+}
+
 export class EvmAdapter implements ChainAdapter {
   chainId: number;
   private client: PublicClient;
   private rpcUrl: string;
+  private chainConfig?: ChainConfig;
 
   constructor(rpcUrl: string, chainId: number) {
     this.chainId = chainId;
@@ -27,7 +46,48 @@ export class EvmAdapter implements ChainAdapter {
     });
   }
 
+  /**
+   * Creates an EvmAdapter from the built-in chain registry.
+   * Uses WebSocket transport with HTTP fallback when available.
+   * If customRpcUrl is provided, it takes priority over registry defaults.
+   */
+  static fromChainId(chainId: number, customRpcUrl?: string): EvmAdapter {
+    const chainConfig = getChainConfig(chainId);
+
+    if (customRpcUrl) {
+      const adapter = new EvmAdapter(customRpcUrl, chainId);
+      if (chainConfig) adapter.chainConfig = chainConfig;
+      return adapter;
+    }
+
+    if (!chainConfig) {
+      throw new Error(
+        `Chain ${chainId} is not in the supported chain registry. Provide a custom RPC URL.`,
+      );
+    }
+
+    const adapter = new EvmAdapter(chainConfig.rpcUrls.http[0], chainId);
+    adapter.chainConfig = chainConfig;
+    // Replace transport with WS-first fallback
+    adapter.client = createPublicClient({
+      transport: buildTransport(chainConfig),
+    });
+    return adapter;
+  }
+
+  getChainInfo(): ChainConfig | undefined {
+    return this.chainConfig;
+  }
+
   private getChain() {
+    if (this.chainConfig) {
+      return defineChain({
+        id: this.chainConfig.chainId,
+        name: this.chainConfig.name,
+        nativeCurrency: this.chainConfig.nativeCurrency,
+        rpcUrls: { default: { http: this.chainConfig.rpcUrls.http } },
+      });
+    }
     return defineChain({
       id: this.chainId,
       name: `Chain ${this.chainId}`,
@@ -111,15 +171,6 @@ export class EvmAdapter implements ChainAdapter {
     };
   }
 
-  private getChain() {
-    return defineChain({
-      id: this.chainId,
-      name: `Chain ${this.chainId}`,
-      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-      rpcUrls: { default: { http: [this.rpcUrl] } },
-    });
-  }
-
   async deployContract(params: DeployParams): Promise<{ hash: string; address?: string }> {
     const account = privateKeyToAccount(params.privateKey as `0x${string}`);
     const chain = this.getChain();
@@ -137,7 +188,6 @@ export class EvmAdapter implements ChainAdapter {
       chain,
     });
 
-    // Wait for receipt to get contract address
     const receipt = await this.client.waitForTransactionReceipt({ hash });
 
     return {

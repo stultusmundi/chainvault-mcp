@@ -3,6 +3,7 @@ import { registerVaultTools } from './tools/vault-tools.js';
 import { registerChainTools } from './tools/chain-tools.js';
 import { registerProxyTools } from './tools/proxy-tools.js';
 import { registerCompilerTools } from './tools/compiler-tools.js';
+import { registerChainRegistryTools } from './tools/chain-registry-tools.js';
 
 interface ServerConfig {
   basePath: string;
@@ -38,6 +39,7 @@ export class ChainVaultServer {
     registerChainTools(this.mcpServer);
     registerProxyTools(this.mcpServer);
     registerCompilerTools(this.mcpServer);
+    registerChainRegistryTools(this.mcpServer);
 
     // Restore original
     this.mcpServer.registerTool = originalRegister;
