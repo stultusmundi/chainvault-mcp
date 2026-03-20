@@ -36,6 +36,10 @@ export { SpendStore } from './db/spend-store.js';
 export { AuditStore } from './db/audit-store.js';
 export type { AuditEntry } from './db/audit-store.js';
 
+// Compiler
+export { SolidityCompiler } from './compiler/solidity.js';
+export type { CompileResult } from './compiler/solidity.js';
+
 // MCP
 export { ChainVaultServer } from './mcp/server.js';
 
