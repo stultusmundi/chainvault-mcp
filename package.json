@@ -16,9 +16,10 @@
     "serve": "node packages/cli/dist/index.js serve"
   },
   "devDependencies": {
+    "@anthropic-ai/claude-code": "^2.1.80",
+    "@types/node": "^22.0.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0",
-    "@types/node": "^22.0.0"
+    "vitest": "^3.0.0"
   },
   "engines": {
     "node": ">=20.0.0"
