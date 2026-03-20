@@ -10,8 +10,8 @@ import {
 } from './chains.js';
 
 describe('Chain Registry', () => {
-  it('has at least 15 supported chains', () => {
-    expect(SUPPORTED_CHAINS.length).toBeGreaterThanOrEqual(15);
+  it('has at least 14 supported chains', () => {
+    expect(SUPPORTED_CHAINS.length).toBeGreaterThanOrEqual(14);
   });
 
   it('every chain has a unique chainId', () => {

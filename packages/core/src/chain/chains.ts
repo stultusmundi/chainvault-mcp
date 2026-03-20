@@ -60,22 +60,6 @@ export const SUPPORTED_CHAINS: ReadonlyArray<ChainConfig> = [
       { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/ethereum-sepolia', type: 'browser' },
     ],
   },
-  {
-    chainId: 17000,
-    name: 'Holesky',
-    network: 'testnet',
-    nativeCurrency: ETH_CURRENCY,
-    rpcUrls: {
-      websocket: ['wss://ethereum-holesky-rpc.publicnode.com'],
-      http: ['https://ethereum-holesky-rpc.publicnode.com'],
-    },
-    blockExplorer: { name: 'Etherscan Holesky', url: 'https://holesky.etherscan.io', apiUrl: 'https://api-holesky.etherscan.io' },
-    faucets: [
-      { name: 'Holesky PoW Faucet', url: 'https://holesky-faucet.pk910.de', type: 'browser' },
-      { name: 'QuickNode Faucet', url: 'https://faucet.quicknode.com/ethereum/holesky', type: 'browser' },
-    ],
-  },
-
   // --- Polygon ---
   {
     chainId: 137,
