@@ -40,6 +40,11 @@ export type { AuditEntry } from './db/audit-store.js';
 export { SolidityCompiler } from './compiler/solidity.js';
 export type { CompileResult } from './compiler/solidity.js';
 
+// Auth / WebAuthn
+export { DualKeyManager } from './vault/dual-key.js';
+export { WebAuthnManager } from './auth/webauthn-server.js';
+export { AuthLocalServer } from './auth/local-server.js';
+
 // MCP
 export { ChainVaultServer } from './mcp/server.js';
 
