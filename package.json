@@ -16,8 +16,10 @@
     "serve": "node packages/cli/dist/index.js serve"
   },
   "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.80",
     "@anthropic-ai/claude-code": "^2.1.80",
     "@types/node": "^22.0.0",
+    "dotenv": "^17.3.1",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },

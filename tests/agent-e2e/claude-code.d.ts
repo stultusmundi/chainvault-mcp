@@ -1,10 +1,9 @@
 /**
- * Minimal type declarations for @anthropic-ai/claude-code SDK.
+ * Minimal type declarations for @anthropic-ai/claude-agent-sdk.
  *
- * The package ships as a bundled CLI without exported .d.ts files.
  * These declarations cover only the subset used by the e2e test scripts.
  */
-declare module '@anthropic-ai/claude-code' {
+declare module '@anthropic-ai/claude-agent-sdk' {
   export interface StdioMcpServer {
     type: 'stdio';
     command: string;
@@ -35,22 +34,45 @@ declare module '@anthropic-ai/claude-code' {
 
   export type ContentBlock = TextBlock | ToolUseBlock;
 
-  export interface MessagePayload {
-    content: ContentBlock[];
+  export interface SDKAssistantMessage {
+    type: 'assistant';
+    uuid: string;
+    session_id: string;
+    message: { content: ContentBlock[] };
+    parent_tool_use_id: string | null;
   }
 
-  /**
-   * Messages streamed from the SDK. The `type` field discriminates between
-   * assistant turns, final results, and other lifecycle events.
-   */
-  export interface SDKMessage {
+  export interface SDKResultMessage {
+    type: 'result';
+    subtype: string;
+    uuid: string;
+    session_id: string;
+    result?: string;
+    is_error: boolean;
+    num_turns: number;
+    total_cost_usd: number;
+  }
+
+  export interface SDKSystemMessage {
+    type: 'system';
+    subtype: 'init';
+    uuid: string;
+    session_id: string;
+    tools: string[];
+    model: string;
+  }
+
+  export type SDKMessage = SDKAssistantMessage | SDKResultMessage | SDKSystemMessage | {
     type: string;
-    message: MessagePayload;
     [key: string]: unknown;
+  };
+
+  export interface Query extends AsyncGenerator<SDKMessage, void> {
+    abort(): void;
   }
 
   export function query(params: {
     prompt: string;
     options?: QueryOptions;
-  }): AsyncIterable<SDKMessage>;
+  }): Query;
 }

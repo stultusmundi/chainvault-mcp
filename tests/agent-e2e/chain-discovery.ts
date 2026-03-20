@@ -1,7 +1,7 @@
 /**
  * Agent E2E Test: Chain Discovery via ChainVault MCP
  *
- * Uses the Claude Code SDK to ask Claude to discover available testnet
+ * Uses the Claude Agent SDK to ask Claude to discover available testnet
  * chains and faucets through the ChainVault MCP server's
  * list_supported_chains and request_faucet tools.
  *
@@ -13,7 +13,8 @@
  *   npx tsx tests/agent-e2e/chain-discovery.ts
  */
 
-import { query } from '@anthropic-ai/claude-code';
+import 'dotenv/config';
+import { query } from '@anthropic-ai/claude-agent-sdk';
 
 // ---------------------------------------------------------------------------
 // Prerequisite checks
@@ -65,8 +66,8 @@ try {
   });
 
   for await (const message of conversation) {
-    // Check for assistant messages containing tool use
-    if (message.type === 'assistant') {
+    // Assistant messages have message.content with tool_use and text blocks
+    if (message.type === 'assistant' && 'message' in message && message.message?.content) {
       for (const block of message.message.content) {
         if (block.type === 'tool_use') {
           if (block.name === 'mcp__chainvault__list_supported_chains') {
@@ -84,13 +85,9 @@ try {
       }
     }
 
-    // Check for result messages
-    if (message.type === 'result') {
-      for (const block of message.message.content) {
-        if (block.type === 'text') {
-          resultText += block.text;
-        }
-      }
+    // Result messages have a top-level `result` string, not message.content
+    if (message.type === 'result' && 'result' in message) {
+      resultText += (message as any).result ?? '';
     }
   }
 } catch (err) {

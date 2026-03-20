@@ -48,8 +48,8 @@ export { AuditStore } from './db/audit-store.js';
 export type { AuditEntry } from './db/audit-store.js';
 
 // Compiler
-export { SolidityCompiler } from './compiler/solidity.js';
-export type { CompileResult } from './compiler/solidity.js';
+export { compile, buildStandardInput, parseOutput, resolveCompiler } from './compiler/solidity.js';
+export type { CompileResult, CompilerMethod } from './compiler/solidity.js';
 
 // Auth / WebAuthn
 export { DualKeyManager } from './vault/dual-key.js';
