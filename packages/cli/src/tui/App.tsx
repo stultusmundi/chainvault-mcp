@@ -1,10 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   MasterVault,
   AgentVaultManager,
   ChainVaultDB,
   AuditStore,
+  DualKeyManager,
+  WebAuthnManager,
+  AuthLocalServer,
 } from '@chainvault/core';
 
 import { PasswordPrompt } from './components/PasswordPrompt.js';
@@ -28,18 +33,23 @@ export function App({ basePath }: AppProps) {
   const [screen, setScreen] = useState<Screen | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [hasPasskey, setHasPasskey] = useState(false);
 
   const lastActivity = useRef(Date.now());
   const dbRef = useRef<ChainVaultDB | null>(null);
   const auditStoreRef = useRef<AuditStore | null>(null);
 
-  // Initialize DB and AuditStore once
+  // Initialize DB and AuditStore once, and check for passkey
   useEffect(() => {
     if (!dbRef.current) {
       const db = new ChainVaultDB(basePath);
       dbRef.current = db;
       auditStoreRef.current = new AuditStore(db);
     }
+
+    const dualKey = new DualKeyManager(basePath);
+    setHasPasskey(dualKey.hasPasskey());
+
     return () => {
       dbRef.current?.close();
     };
@@ -78,6 +88,49 @@ export function App({ basePath }: AppProps) {
     }
   }, [basePath]);
 
+  const handlePasskeyRequest = useCallback(async () => {
+    try {
+      const dualKey = new DualKeyManager(basePath);
+      const webauthn = new WebAuthnManager();
+      const server = new AuthLocalServer();
+
+      // Read stored credential ID from passkey.json
+      const raw = await readFile(join(basePath, 'passkey.json'), 'utf8');
+      const { credentialId } = JSON.parse(raw);
+
+      // Generate auth options with the stored credential ID
+      const options = webauthn.generateAuthenticationOptions(credentialId);
+
+      const port = await server.start();
+
+      // Open browser for WebAuthn authentication
+      const { execFile: execFileCb } = await import('node:child_process');
+      const openCmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
+      execFileCb(openCmd, [server.getUrl('auth')]);
+
+      // Wait for callback from browser
+      const response = await server.waitForCallback() as { rawId?: string };
+      await server.stop();
+
+      if (!response.rawId) {
+        setError('Passkey response missing credential data');
+        return;
+      }
+
+      // Verify we got a valid credential back
+      const rawId = Buffer.from(response.rawId, 'base64');
+      // Attempt unlock with the passkey credential
+      await dualKey.unlockWithPasskey(rawId);
+
+      // Passkey verified, but MasterVault.unlock() still requires a password.
+      // For vaults created with DualKeyManager the full flow will work in a future release.
+      setError('Passkey verified! Enter password to complete unlock.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Passkey authentication failed';
+      setError(message);
+    }
+  }, [basePath]);
+
   const handleBack = useCallback(() => {
     setScreen(null);
     refresh();
@@ -85,7 +138,14 @@ export function App({ basePath }: AppProps) {
 
   // Locked state: show password prompt
   if (!vault) {
-    return <PasswordPrompt onSubmit={handlePasswordSubmit} error={error ?? undefined} />;
+    return (
+      <PasswordPrompt
+        onSubmit={handlePasswordSubmit}
+        error={error ?? undefined}
+        hasPasskey={hasPasskey}
+        onPasskeyRequest={handlePasskeyRequest}
+      />
+    );
   }
 
   // Menu state: show main menu

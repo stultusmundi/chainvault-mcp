@@ -29,5 +29,8 @@ describe('ChainVaultServer', () => {
     // Proxy tools
     expect(toolNames).toContain('query_explorer');
     expect(toolNames).toContain('query_price');
+
+    // Compiler tools
+    expect(toolNames).toContain('compile_contract');
   });
 });

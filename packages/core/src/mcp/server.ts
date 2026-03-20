@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerVaultTools } from './tools/vault-tools.js';
 import { registerChainTools } from './tools/chain-tools.js';
 import { registerProxyTools } from './tools/proxy-tools.js';
+import { registerCompilerTools } from './tools/compiler-tools.js';
 
 interface ServerConfig {
   basePath: string;
@@ -36,6 +37,7 @@ export class ChainVaultServer {
     registerVaultTools(this.mcpServer);
     registerChainTools(this.mcpServer);
     registerProxyTools(this.mcpServer);
+    registerCompilerTools(this.mcpServer);
 
     // Restore original
     this.mcpServer.registerTool = originalRegister;
