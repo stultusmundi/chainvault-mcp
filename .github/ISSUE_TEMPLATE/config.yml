@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/stultusmundi/chainvault-mcp/discussions
+    about: Use Discussions for questions, help, and general conversation
+  - name: Security Vulnerabilities
+    url: https://github.com/stultusmundi/chainvault-mcp/security/advisories/new
+    about: Report security vulnerabilities via Security Advisories (NOT public issues)

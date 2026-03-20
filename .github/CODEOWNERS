@@ -1,0 +1,6 @@
+# Default owner for everything
+* @stultusmundi
+
+# Core security-sensitive code
+packages/core/src/vault/ @stultusmundi
+packages/core/src/mcp/ @stultusmundi
