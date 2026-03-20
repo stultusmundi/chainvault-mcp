@@ -27,6 +27,15 @@ export class EvmAdapter implements ChainAdapter {
     });
   }
 
+  private getChain() {
+    return defineChain({
+      id: this.chainId,
+      name: `Chain ${this.chainId}`,
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: { default: { http: [this.rpcUrl] } },
+    });
+  }
+
   async getBalance(address: string): Promise<BalanceResult> {
     const balance = await this.client.getBalance({ address: address as `0x${string}` });
     return {
