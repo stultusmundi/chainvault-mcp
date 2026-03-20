@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",
+    "@simplewebauthn/server": "^13.3.0",
     "better-sqlite3": "^12.8.0",
     "viem": "^2.30.0",
     "zod": "^3.25.0"
