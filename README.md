@@ -2,35 +2,40 @@
 
 **Your AI agent gets blockchain superpowers without ever touching a private key.**
 
-ChainVault MCP is a secure [Model Context Protocol](https://modelcontextprotocol.io/) server that acts as a gateway between AI agents and EVM blockchains. It provides vault-based key management, rule-enforced access control, and API proxying — so your agent can deploy contracts, read chain state, and query block explorers without direct access to secrets.
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![Node: >=20](https://img.shields.io/badge/Node-%3E%3D20-green.svg)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)
+![Tests: 427 passing](https://img.shields.io/badge/Tests-427%20passing-brightgreen.svg)
+
+ChainVault MCP is a secure [Model Context Protocol](https://modelcontextprotocol.io/) server that acts as a gateway between AI agents and EVM blockchains. It provides vault-based key management, rule-enforced access control, and API proxying -- so your agent can deploy contracts, read chain state, and query block explorers without direct access to any secret.
 
 ## Architecture
 
 ```
-┌──────────────┐     MCP (stdio)      ┌──────────────────────────────────────────┐
-│   AI Agent   │◄────────────────────►│            ChainVault MCP                │
-│  (Claude,    │  Tools: deploy,      │                                          │
-│   GPT, etc.) │  read, simulate...   │  ┌─────────┐  ┌──────────┐  ┌────────┐ │
-└──────────────┘                      │  │  Rules   │  │  Vault   │  │ Audit  │ │
-                                      │  │  Engine  │  │ Manager  │  │ Logger │ │
-                                      │  └────┬─────┘  └────┬─────┘  └────────┘ │
-                                      │       │  deny?       │ decrypt           │
-                                      │       ▼              ▼                   │
-                                      │  ┌─────────┐  ┌──────────┐              │
-                                      │  │  Chain   │  │   API    │              │
-                                      │  │ Adapter  │  │  Proxy   │              │
-                                      │  └────┬─────┘  └────┬─────┘              │
-                                      └───────┼─────────────┼────────────────────┘
-                                              │             │
-                                              ▼             ▼
-                                         EVM RPCs     Block Explorer APIs
-                                        (Ethereum,    (Etherscan, etc.)
-                                         Sepolia...)
++----------------+     MCP (stdio)      +------------------------------------------+
+|   AI Agent     |<-------------------->|            ChainVault MCP                |
+|  (Claude,      |  Tools: deploy,      |                                          |
+|   GPT, etc.)   |  read, simulate...   |  +---------+  +----------+  +--------+  |
++----------------+                      |  |  Rules   |  |  Vault   |  | Audit  |  |
+                                        |  |  Engine  |  | Manager  |  | Logger |  |
+                                        |  +----+-----+  +----+-----+  +--------+  |
+                                        |       |  deny?       | decrypt           |
+                                        |       v              v                   |
+                                        |  +---------+  +----------+              |
+                                        |  |  Chain   |  |   API    |              |
+                                        |  | Adapter  |  |  Proxy   |              |
+                                        |  +----+-----+  +----+-----+              |
+                                        +-------+-----------+-+--------------------+
+                                                |             |
+                                                v             v
+                                           EVM RPCs     Block Explorer APIs
+                                          (Ethereum,    (Etherscan, etc.)
+                                           Sepolia...)
 ```
 
 ## Why ChainVault?
 
-**The problem:** Giving an AI agent a private key is like giving a stranger your house keys. One prompt injection, one hallucination, one misconfigured tool — and your funds are gone.
+**The problem:** Giving an AI agent a private key is like giving a stranger your house keys. One prompt injection, one hallucination, one misconfigured tool -- and your funds are gone.
 
 **The solution:** ChainVault uses a **zero-knowledge agent architecture**:
 
@@ -46,38 +51,22 @@ ChainVault MCP is a secure [Model Context Protocol](https://modelcontextprotocol
 
 ## Quick Start
 
-### Install
-
 ```bash
-git clone https://github.com/stultusmundi/chainvault-mcp.git
-cd chainvault-mcp
-npm install
+npm install -g chainvault-mcp
+chainvault init                       # create master vault (prompted for password)
+chainvault key add my-wallet          # prompted for private key, never in args
+chainvault agent create deployer      # interactive setup via TUI
+chainvault serve                      # start MCP server
 ```
 
-### Initialize a Vault
-
-```bash
-export CHAINVAULT_PASSWORD="your-secure-password"
-npx chainvault init
-```
-
-### Add a Key
-
-```bash
-# Keys are prompted interactively in TUI mode
-# For scripting, use the programmatic API
-```
-
-### Configure as MCP Server
-
-Add to your Claude Desktop config (`claude_desktop_config.json`):
+Add to your MCP client config (Claude Desktop, Cursor, etc.):
 
 ```json
 {
   "mcpServers": {
     "chainvault": {
-      "command": "npx",
-      "args": ["chainvault", "serve"],
+      "command": "chainvault",
+      "args": ["serve"],
       "env": {
         "CHAINVAULT_VAULT_KEY": "cv_agent_<your-agent-vault-key>"
       }
@@ -86,82 +75,101 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
 }
 ```
 
+## Supported Chains
+
+14 EVM chains with built-in public RPCs (via [PublicNode](https://publicnode.com/)) -- no API key required.
+
+| Chain | ID | Type | Currency | Faucet |
+|---|---|---|---|---|
+| Ethereum Mainnet | `1` | Mainnet | ETH | -- |
+| Sepolia | `11155111` | Testnet | ETH | [Available](https://cloud.google.com/application/web3/faucet/ethereum/sepolia) |
+| Polygon | `137` | Mainnet | POL | -- |
+| Polygon Amoy | `80002` | Testnet | POL | [Available](https://faucet.polygon.technology) |
+| Arbitrum One | `42161` | Mainnet | ETH | -- |
+| Arbitrum Sepolia | `421614` | Testnet | ETH | [Available](https://faucet.quicknode.com/arbitrum/sepolia) |
+| Optimism | `10` | Mainnet | ETH | -- |
+| Optimism Sepolia | `11155420` | Testnet | ETH | [Available](https://app.optimism.io/faucet) |
+| Base | `8453` | Mainnet | ETH | -- |
+| Base Sepolia | `84532` | Testnet | ETH | [Available](https://app.optimism.io/faucet) |
+| BNB Smart Chain | `56` | Mainnet | BNB | -- |
+| BSC Testnet | `97` | Testnet | BNB | [Available](https://www.bnbchain.org/en/testnet-faucet) |
+| Avalanche C-Chain | `43114` | Mainnet | AVAX | -- |
+| Avalanche Fuji | `43113` | Testnet | AVAX | [Available](https://core.app/tools/testnet-faucet/?subnet=c&token=c) |
+
 ## MCP Tools
 
-| Tool | Category | Description |
-|------|----------|-------------|
-| `list_chains` | Vault | Show accessible blockchain networks |
-| `list_capabilities` | Vault | Show allowed actions and limits |
-| `get_agent_address` | Vault | Get wallet address for a chain (public only) |
-| `deploy_contract` | Chain | Deploy compiled bytecode to a blockchain |
-| `interact_contract` | Chain | Call state-changing contract functions |
-| `get_balance` | Chain | Get native token balance for an address |
-| `get_contract_state` | Chain | Read contract view/pure functions |
-| `simulate_transaction` | Chain | Dry-run a transaction without sending |
-| `get_events` | Chain | Query contract event logs |
-| `get_transaction` | Chain | Get transaction details and receipt |
-| `verify_contract` | Chain | Verify source code on block explorer |
-| `query_explorer` | Proxy | Query block explorer APIs (Etherscan, etc.) |
-| `query_price` | Proxy | Get token price data |
+19 tools across 5 categories. All tools return structured JSON, never raw RPC responses.
+
+### Contract Lifecycle
+
+| Tool | Description |
+|---|---|
+| `deploy_contract` | Deploy compiled bytecode to a blockchain |
+| `interact_contract` | Call a state-changing function on a deployed contract |
+| `verify_contract` | Verify source code on a block explorer (Etherscan, etc.) |
+| `compile_contract` | Compile Solidity source code using solc |
+
+### Chain Reading
+
+| Tool | Description |
+|---|---|
+| `get_balance` | Get native token balance for an address |
+| `get_contract_state` | Call read-only functions on a smart contract |
+| `simulate_transaction` | Dry-run a transaction without sending |
+| `get_events` | Query contract event logs with filters |
+| `get_transaction` | Get transaction details and receipt by hash |
+
+### Vault Management
+
+| Tool | Description |
+|---|---|
+| `list_chains` | Show which chains this agent has access to |
+| `list_capabilities` | Show allowed actions, tx types, and limits |
+| `get_agent_address` | Get wallet address for a chain (public key only) |
+
+### API Proxy
+
+| Tool | Description |
+|---|---|
+| `query_explorer` | Query block explorer APIs (Etherscan, etc.) |
+| `query_price` | Get token price data from CoinGecko |
+
+### Chain Registry
+
+| Tool | Description |
+|---|---|
+| `list_supported_chains` | List all supported chains with RPC and faucet status |
+| `request_faucet` | Request testnet tokens from a faucet |
+
+## TUI
+
+Running `chainvault` with no arguments launches an interactive terminal UI built with Ink (React for CLI). The TUI provides six screens: **Dashboard** (vault status, active agents, recent activity), **Keys** (add, remove, view wallet addresses), **Agents** (create, configure permissions, rotate keys, revoke), **Services** (manage API keys and RPC endpoints), **Logs** (live audit log, filterable by agent and status), and **Rules** (edit agent rules with guided prompts). All secret inputs are prompted interactively and never appear in shell history.
 
 ## Security Model
 
-ChainVault implements **defense in depth** with two independent security layers:
-
-### Layer 1: Rules Engine
-Before any vault decryption, the rules engine checks:
-- **Chain access** — Is the agent allowed on this chain?
-- **Transaction type** — Can it deploy, write, read, or simulate?
-- **Spend limits** — Per-transaction, daily, and monthly caps
-- **Contract rules** — Whitelist/blacklist target addresses
-- **API access** — Which endpoints and services are allowed?
-
-### Layer 2: Vault Isolation
-Even if rules pass, the agent vault only contains secrets explicitly granted by the admin:
-- Agent vaults are encrypted with unique AES-256-GCM keys
-- Master vault requires a separate password
-- Key rotation invalidates old vault keys instantly
-- Revocation deletes the agent vault file entirely
+- **Zero-knowledge agent** -- the agent never sees any raw secret
+- **Least privilege** -- each agent gets only the keys and permissions it needs
+- **Defense in depth** -- rules engine blocks + vault doesn't contain unauthorized keys (double barrier)
+- **Instant revocation** -- rotate or delete a vault key and the agent is locked out immediately
 
 ### Threat Model
 
 | Threat | Mitigation |
-|--------|------------|
-| Prompt injection tries to extract keys | Keys never in agent context — vault returns results, not secrets |
-| Agent tries unauthorized chain | Rules engine denies before vault decryption |
-| Agent exceeds spending limits | Per-tx, daily, and monthly spend tracking |
-| Compromised agent vault key | Key rotation + revocation; old keys instantly invalid |
-| API key abuse | Rate limiting, endpoint whitelisting, usage tracking |
+|---|---|
+| Prompt injection extracts keys | Keys never in agent context -- vault returns results, not secrets |
+| Agent tries unauthorized chain | Rules engine denies before vault decryption + key not in vault |
+| Agent exceeds spending limits | Per-tx, daily, and monthly spend tracking with hard caps |
+| Compromised agent vault key | Rotate key instantly; old key becomes useless. Limited blast radius |
+| API key abuse | Rate limiting, endpoint whitelisting, per-agent usage tracking |
 
-## Development
+See [SECURITY.md](./SECURITY.md) for the full security model.
 
-```bash
-npm run test        # Run all tests
-npm run test:watch  # Watch mode
-npm run lint        # Type check
-npm run build       # Build all packages
-```
+## Contributing
 
-### Project Structure
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, testing, and contribution guidelines.
 
-```
-chainvault-mcp/
-├── packages/
-│   ├── core/              # MCP server, vault, rules, chain, proxy, audit
-│   │   └── src/
-│   │       ├── vault/     # Encryption, master vault, agent vaults
-│   │       ├── rules/     # Rule engine enforcement
-│   │       ├── chain/     # ChainAdapter interface + EVM implementation
-│   │       ├── proxy/     # API proxy with caching and rate limiting
-│   │       ├── audit/     # Append-only audit logger
-│   │       └── mcp/       # MCP server and tool definitions
-│   └── cli/               # CLI commands and TUI
-│       └── src/
-│           └── commands/   # init, key, agent, serve
-├── CLAUDE.md              # AI development guidelines
-└── vitest.config.ts       # Test configuration
-```
+This project follows the [Contributor Covenant Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## License
 
-MIT
+[MIT](./LICENSE)
