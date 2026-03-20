@@ -30,6 +30,12 @@ export { ApiProxy } from './proxy/api-proxy.js';
 // Audit
 export { AuditLogger } from './audit/logger.js';
 
+// Database
+export { ChainVaultDB } from './db/database.js';
+export { SpendStore } from './db/spend-store.js';
+export { AuditStore } from './db/audit-store.js';
+export type { AuditEntry } from './db/audit-store.js';
+
 // MCP
 export { ChainVaultServer } from './mcp/server.js';
 

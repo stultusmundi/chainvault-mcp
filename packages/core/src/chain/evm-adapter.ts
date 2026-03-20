@@ -111,6 +111,15 @@ export class EvmAdapter implements ChainAdapter {
     };
   }
 
+  private getChain() {
+    return defineChain({
+      id: this.chainId,
+      name: `Chain ${this.chainId}`,
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: { default: { http: [this.rpcUrl] } },
+    });
+  }
+
   async deployContract(params: DeployParams): Promise<{ hash: string; address?: string }> {
     const account = privateKeyToAccount(params.privateKey as `0x${string}`);
     const chain = this.getChain();

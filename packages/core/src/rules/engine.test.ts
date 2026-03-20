@@ -1,4 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ChainVaultDB } from '../db/database.js';
+import { SpendStore } from '../db/spend-store.js';
 import { RulesEngine, type TxRequest, type ApiRequest } from './engine.js';
 import type { AgentConfig } from '../vault/types.js';
 
@@ -185,5 +190,47 @@ describe('RulesEngine', () => {
       });
       expect(result.approved).toBe(true);
     });
+  });
+});
+
+describe('RulesEngine with SpendStore', () => {
+  let testDir: string;
+  let db: ChainVaultDB;
+  let spendStore: SpendStore;
+
+  beforeEach(async () => {
+    testDir = await mkdtemp(join(tmpdir(), 'chainvault-rules-db-'));
+    db = new ChainVaultDB(testDir);
+    spendStore = new SpendStore(db);
+  });
+
+  afterEach(async () => {
+    db.close();
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  it('uses SpendStore for persistent spend tracking', () => {
+    const engine = new RulesEngine(DEPLOYER_CONFIG, { spendStore, agentName: 'deployer' });
+    engine.recordSpend(11155111, 4.5);
+
+    const engine2 = new RulesEngine(DEPLOYER_CONFIG, { spendStore, agentName: 'deployer' });
+    const result = engine2.checkTxRequest({
+      type: 'write',
+      chain_id: 11155111,
+      value: '1.0',
+    });
+    expect(result.approved).toBe(false);
+    expect(result.reason).toContain('daily limit');
+  });
+
+  it('falls back to in-memory when no SpendStore provided', () => {
+    const engine = new RulesEngine(DEPLOYER_CONFIG);
+    engine.recordSpend(11155111, 4.5);
+    const result = engine.checkTxRequest({
+      type: 'write',
+      chain_id: 11155111,
+      value: '1.0',
+    });
+    expect(result.approved).toBe(false);
   });
 });
