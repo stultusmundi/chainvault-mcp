@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { AgentContext } from '../context.js';
 
-export function registerVaultTools(server: McpServer): void {
+type ContextGetter = () => AgentContext | null;
+
+export function registerVaultTools(server: McpServer, getContext: ContextGetter): void {
   server.registerTool(
     'list_chains',
     {
