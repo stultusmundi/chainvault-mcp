@@ -1,10 +1,22 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { EvmAdapter } from '../../chain/evm-adapter.js';
 import type { AgentContext } from '../context.js';
 
 type ContextGetter = () => AgentContext | null;
 
+function checkChainAccess(ctx: AgentContext | null, chainId: number): string | null {
+  if (!ctx) return 'No agent context. Set CHAINVAULT_VAULT_KEY.';
+  const result = ctx.rules.checkTxRequest({ type: 'read', chain_id: chainId, value: '0' });
+  if (!result.approved) return result.reason ?? `Agent does not have access to chain ${chainId}.`;
+  return null;
+}
+
 export function registerChainTools(server: McpServer, getContext: ContextGetter): void {
+  // ---------------------------------------------------------------------------
+  // Tier 2 stubs (not yet wired)
+  // ---------------------------------------------------------------------------
+
   server.registerTool(
     'deploy_contract',
     {
@@ -18,7 +30,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
       }),
     },
     async () => {
-      return { content: [{ type: 'text' as const, text: '' }] };
+      return { content: [{ type: 'text' as const, text: 'Not yet implemented. Coming in Tier 2.' }] };
     },
   );
 
@@ -37,7 +49,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
       }),
     },
     async () => {
-      return { content: [{ type: 'text' as const, text: '' }] };
+      return { content: [{ type: 'text' as const, text: 'Not yet implemented. Coming in Tier 2.' }] };
     },
   );
 
@@ -56,9 +68,13 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
       }),
     },
     async () => {
-      return { content: [{ type: 'text' as const, text: '' }] };
+      return { content: [{ type: 'text' as const, text: 'Not yet implemented. Coming in Tier 2.' }] };
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // Tier 1 wired tools
+  // ---------------------------------------------------------------------------
 
   server.registerTool(
     'get_balance',
@@ -70,8 +86,18 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         address: z.string().describe('Wallet or contract address'),
       }),
     },
-    async () => {
-      return { content: [{ type: 'text' as const, text: '' }] };
+    async ({ chain_id, address }) => {
+      const ctx = getContext();
+      const err = checkChainAccess(ctx, chain_id);
+      if (err) return { content: [{ type: 'text' as const, text: err }] };
+
+      try {
+        const adapter = EvmAdapter.fromChainId(chain_id);
+        const balance = await adapter.getBalance(address);
+        return { content: [{ type: 'text' as const, text: JSON.stringify(balance, null, 2) }] };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      }
     },
   );
 
@@ -88,8 +114,24 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         args: z.array(z.any()).optional().describe('Function arguments'),
       }),
     },
-    async () => {
-      return { content: [{ type: 'text' as const, text: '' }] };
+    async ({ chain_id, address, abi, function_name, args }) => {
+      const ctx = getContext();
+      const err = checkChainAccess(ctx, chain_id);
+      if (err) return { content: [{ type: 'text' as const, text: err }] };
+
+      try {
+        const parsedAbi = JSON.parse(abi);
+        const adapter = EvmAdapter.fromChainId(chain_id);
+        const result = await adapter.readContract({
+          address,
+          abi: parsedAbi,
+          functionName: function_name,
+          args: args ?? [],
+        });
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ result }, null, 2) }] };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      }
     },
   );
 
@@ -107,8 +149,31 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         value: z.string().optional().describe('Native token value (in ETH)'),
       }),
     },
-    async () => {
-      return { content: [{ type: 'text' as const, text: '' }] };
+    async ({ chain_id, address, abi, function_name, args, value }) => {
+      const ctx = getContext();
+      const err = checkChainAccess(ctx, chain_id);
+      if (err) return { content: [{ type: 'text' as const, text: err }] };
+
+      try {
+        const agentKey = ctx!.keys.find((k) => k.chains.includes(chain_id));
+        if (!agentKey) {
+          return { content: [{ type: 'text' as const, text: `No key available for chain ${chain_id}.` }] };
+        }
+
+        const parsedAbi = JSON.parse(abi);
+        const adapter = EvmAdapter.fromChainId(chain_id);
+        const result = await adapter.simulateTransaction({
+          address,
+          abi: parsedAbi,
+          functionName: function_name,
+          args: args ?? [],
+          account: agentKey.address,
+          value,
+        });
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      }
     },
   );
 
@@ -126,8 +191,25 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         to_block: z.number().optional().describe('End block number'),
       }),
     },
-    async () => {
-      return { content: [{ type: 'text' as const, text: '' }] };
+    async ({ chain_id, address, abi, event_name, from_block, to_block }) => {
+      const ctx = getContext();
+      const err = checkChainAccess(ctx, chain_id);
+      if (err) return { content: [{ type: 'text' as const, text: err }] };
+
+      try {
+        const parsedAbi = JSON.parse(abi);
+        const adapter = EvmAdapter.fromChainId(chain_id);
+        const events = await adapter.getEvents({
+          address,
+          abi: parsedAbi,
+          eventName: event_name,
+          fromBlock: from_block !== undefined ? BigInt(from_block) : undefined,
+          toBlock: to_block !== undefined ? BigInt(to_block) : undefined,
+        });
+        return { content: [{ type: 'text' as const, text: JSON.stringify(events, null, 2) }] };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      }
     },
   );
 
@@ -141,8 +223,18 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         hash: z.string().describe('Transaction hash'),
       }),
     },
-    async () => {
-      return { content: [{ type: 'text' as const, text: '' }] };
+    async ({ chain_id, hash }) => {
+      const ctx = getContext();
+      const err = checkChainAccess(ctx, chain_id);
+      if (err) return { content: [{ type: 'text' as const, text: err }] };
+
+      try {
+        const adapter = EvmAdapter.fromChainId(chain_id);
+        const tx = await adapter.getTransaction(hash);
+        return { content: [{ type: 'text' as const, text: JSON.stringify(tx, null, 2) }] };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      }
     },
   );
 }

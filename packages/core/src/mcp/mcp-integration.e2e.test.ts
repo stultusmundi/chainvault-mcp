@@ -370,5 +370,79 @@ describe('MCP Server Integration (in-process via InMemoryTransport)', () => {
       const text = (result.content as any)[0].text;
       expect(text).toContain('does not have access');
     });
+
+    // -----------------------------------------------------------------
+    // Chain read tools
+    // -----------------------------------------------------------------
+    describe('Chain read tools', () => {
+      it('get_balance returns error for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'get_balance',
+          arguments: { chain_id: 1, address: '0x0000000000000000000000000000000000000000' },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
+
+      it('get_balance returns error without agent context', async () => {
+        const result = await client.callTool({
+          name: 'get_balance',
+          arguments: { chain_id: 11155111, address: '0x0000000000000000000000000000000000000000' },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('CHAINVAULT_VAULT_KEY');
+      });
+
+      it('get_transaction returns error for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'get_transaction',
+          arguments: { chain_id: 1, hash: '0xabc' },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
+
+      it('simulate_transaction returns error for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'simulate_transaction',
+          arguments: {
+            chain_id: 1,
+            address: '0x0000000000000000000000000000000000000000',
+            abi: '[]',
+            function_name: 'test',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
+
+      it('get_events returns error for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'get_events',
+          arguments: {
+            chain_id: 1,
+            address: '0x0000000000000000000000000000000000000000',
+            abi: '[]',
+            event_name: 'Transfer',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
+
+      it('get_contract_state returns error for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'get_contract_state',
+          arguments: {
+            chain_id: 1,
+            address: '0x0000000000000000000000000000000000000000',
+            abi: '[]',
+            function_name: 'test',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
+    });
   });
 });
