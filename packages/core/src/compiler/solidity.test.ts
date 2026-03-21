@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EventEmitter } from 'node:events';
+import { Writable, Readable } from 'node:stream';
 
-const { mockExecFile } = vi.hoisted(() => ({
+const { mockExecFile, mockSpawn } = vi.hoisted(() => ({
   mockExecFile: vi.fn(),
+  mockSpawn: vi.fn(),
 }));
 
 vi.mock('node:child_process', () => ({
   execFile: mockExecFile,
+  spawn: mockSpawn,
 }));
 
 vi.mock('node:util', () => ({
@@ -14,6 +18,23 @@ vi.mock('node:util', () => ({
 
 import { buildStandardInput, parseOutput, resolveCompiler, compile } from './solidity.js';
 import type { CompileResult, CompilerMethod } from './solidity.js';
+
+/** Helper: create a fake child process returned by spawn. */
+function createFakeProcess(stdout: string, exitCode = 0) {
+  const proc = new EventEmitter() as any;
+  proc.stdout = new EventEmitter();
+  proc.stderr = new EventEmitter();
+  proc.stdin = new Writable({ write(_chunk, _enc, cb) { cb(); } });
+  proc.kill = vi.fn();
+
+  // Schedule data + close events on next tick so callers have time to attach listeners
+  process.nextTick(() => {
+    proc.stdout.emit('data', Buffer.from(stdout));
+    proc.emit('close', exitCode);
+  });
+
+  return proc;
+}
 
 const SOLC_SUCCESS_OUTPUT = JSON.stringify({
   contracts: {
@@ -91,6 +112,7 @@ describe('parseOutput', () => {
 describe('resolveCompiler', () => {
   beforeEach(() => {
     mockExecFile.mockReset();
+    mockSpawn.mockReset();
   });
 
   it('prefers docker when available', async () => {
@@ -100,7 +122,7 @@ describe('resolveCompiler', () => {
 
     expect(method.type).toBe('docker');
     expect(method.version).toBe('0.8.24');
-    expect(mockExecFile).toHaveBeenCalledWith('docker', ['info']);
+    expect(mockExecFile).toHaveBeenCalledWith('docker', ['info'], { timeout: 5000 });
   });
 
   it('falls back to local solc with version match', async () => {
@@ -137,13 +159,14 @@ describe('resolveCompiler', () => {
 describe('compile', () => {
   beforeEach(() => {
     mockExecFile.mockReset();
+    mockSpawn.mockReset();
   });
 
   it('compiles using docker when available', async () => {
     // resolveCompiler: docker info succeeds
     mockExecFile.mockResolvedValueOnce({ stdout: 'Docker info', stderr: '' });
-    // compile: docker run solc
-    mockExecFile.mockResolvedValueOnce({ stdout: SOLC_SUCCESS_OUTPUT, stderr: '' });
+    // compile: spawn docker run solc
+    mockSpawn.mockReturnValueOnce(createFakeProcess(SOLC_SUCCESS_OUTPUT));
 
     const result = await compile(
       'pragma solidity ^0.8.24; contract Counter {}',
@@ -153,10 +176,9 @@ describe('compile', () => {
 
     expect(result.abi).toHaveLength(1);
     expect(result.bytecode).toMatch(/^0x/);
-    expect(mockExecFile).toHaveBeenCalledWith(
+    expect(mockSpawn).toHaveBeenCalledWith(
       'docker',
       ['run', '--rm', '-i', 'ethereum/solc:0.8.24', '--standard-json'],
-      expect.objectContaining({ input: expect.any(String) }),
     );
   });
 
@@ -167,8 +189,8 @@ describe('compile', () => {
       stdout: 'Version: 0.8.24+commit.abc',
       stderr: '',
     });
-    // compile: local solc
-    mockExecFile.mockResolvedValueOnce({ stdout: SOLC_SUCCESS_OUTPUT, stderr: '' });
+    // compile: spawn local solc
+    mockSpawn.mockReturnValueOnce(createFakeProcess(SOLC_SUCCESS_OUTPUT));
 
     const result = await compile(
       'pragma solidity ^0.8.24; contract Counter {}',
@@ -177,10 +199,9 @@ describe('compile', () => {
     );
 
     expect(result.abi).toHaveLength(1);
-    expect(mockExecFile).toHaveBeenCalledWith(
+    expect(mockSpawn).toHaveBeenCalledWith(
       'solc',
       ['--standard-json'],
-      expect.objectContaining({ input: expect.any(String) }),
     );
   });
 });

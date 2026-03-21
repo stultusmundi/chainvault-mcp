@@ -236,6 +236,32 @@ describe('MCP Server Integration (in-process via InMemoryTransport)', () => {
   });
 
   // -----------------------------------------------------------------------
+  // compile_contract tool
+  // -----------------------------------------------------------------------
+  describe('compile_contract tool', () => {
+    it('compile_contract returns structured result or compiler-not-found error', { timeout: 30000 }, async () => {
+      const result = await client.callTool({
+        name: 'compile_contract',
+        arguments: {
+          source_code: 'pragma solidity ^0.8.20; contract Hello { function greet() public pure returns (string memory) { return "hi"; } }',
+          compiler_version: '0.8.20',
+          contract_name: 'Hello',
+        },
+      });
+      const text = (result.content as any)[0].text;
+      const parsed = JSON.parse(text);
+      // Either success with ABI or error about missing compiler — both are valid
+      if (parsed.error) {
+        expect(parsed.error).toMatch(/compiler|solc|docker/i);
+      } else {
+        expect(parsed.abi).toBeDefined();
+        expect(Array.isArray(parsed.abi)).toBe(true);
+        expect(parsed.bytecode).toBeDefined();
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // Stub tools return without error
   // -----------------------------------------------------------------------
   describe('Stub tools return without error', () => {

@@ -1,7 +1,60 @@
-import { execFile as execFileCb } from 'node:child_process';
+import { execFile as execFileCb, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFileCb);
+
+/**
+ * Runs a command, pipes `input` to stdin, and collects stdout.
+ * Uses spawn + manual stdin.end() to avoid the hang that execFile's
+ * `input` option causes with `docker run -i`.
+ */
+function spawnWithInput(
+  cmd: string,
+  args: string[],
+  input: string,
+  timeoutMs = 60_000,
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, args);
+    let stdout = '';
+    let stderr = '';
+    let done = false;
+
+    const timer = setTimeout(() => {
+      if (!done) {
+        done = true;
+        proc.kill('SIGKILL');
+        reject(new Error(`Command timed out after ${timeoutMs}ms: ${cmd} ${args.join(' ')}`));
+      }
+    }, timeoutMs);
+
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+    proc.on('error', (err) => {
+      if (!done) {
+        done = true;
+        clearTimeout(timer);
+        reject(err);
+      }
+    });
+
+    proc.on('close', (code) => {
+      if (!done) {
+        done = true;
+        clearTimeout(timer);
+        if (code !== 0) {
+          reject(new Error(`Command exited with code ${code}: ${stderr}`));
+        } else {
+          resolve({ stdout, stderr });
+        }
+      }
+    });
+
+    proc.stdin.write(input);
+    proc.stdin.end();
+  });
+}
 
 export interface CompileResult {
   abi: any[];
@@ -76,16 +129,16 @@ export function parseOutput(rawOutput: string, contractName: string): CompileRes
 }
 
 export async function resolveCompiler(version: string): Promise<CompilerMethod> {
-  // Try docker first
+  // Try docker first (with timeout to avoid hanging when Docker Desktop is installed but not running)
   try {
-    await execFileAsync('docker', ['info']);
+    await execFileAsync('docker', ['info'], { timeout: 5000 });
     return { type: 'docker', version };
   } catch {
     // Docker not available, try local solc
   }
 
   try {
-    const { stdout } = await execFileAsync('solc', ['--version']);
+    const { stdout } = await execFileAsync('solc', ['--version'], { timeout: 5000 });
     const match = stdout.match(/Version:\s*(\d+\.\d+\.\d+)/);
     if (match) {
       const localVersion = match[1];
@@ -120,14 +173,14 @@ export async function compile(
   let stdout: string;
 
   if (compiler.type === 'docker') {
-    const result = await execFileAsync(
+    const result = await spawnWithInput(
       'docker',
       ['run', '--rm', '-i', 'ethereum/solc:' + version, '--standard-json'],
-      { input },
+      input,
     );
     stdout = result.stdout;
   } else {
-    const result = await execFileAsync('solc', ['--standard-json'], { input });
+    const result = await spawnWithInput('solc', ['--standard-json'], input);
     stdout = result.stdout;
   }
 
