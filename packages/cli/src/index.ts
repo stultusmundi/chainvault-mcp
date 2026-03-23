@@ -61,6 +61,21 @@ agentCmd
     console.log(result);
   });
 
+const solcCmd = program.command('solc').description('Manage Solidity compiler');
+solcCmd
+  .command('pull [version]')
+  .description('Pull solc Docker image for contract compilation')
+  .action(async (version: string | undefined) => {
+    const { pullSolc } = await import('./commands/solc.js');
+    try {
+      const result = await pullSolc(version || '0.8.20');
+      console.log(result);
+    } catch (err: any) {
+      console.error(err.message);
+      process.exit(1);
+    }
+  });
+
 if (process.argv.length <= 2) {
   // No command args: launch TUI
   const { render } = await import('ink');

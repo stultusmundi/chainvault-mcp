@@ -58,5 +58,7 @@ export { AuthLocalServer } from './auth/local-server.js';
 
 // MCP
 export { ChainVaultServer } from './mcp/server.js';
+export { createAgentContext } from './mcp/context.js';
+export type { AgentContext, AgentKeyInfo } from './mcp/context.js';
 
 export const VERSION = '0.1.0';

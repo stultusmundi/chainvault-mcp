@@ -75,6 +75,20 @@ Add to your MCP client config (Claude Desktop, Cursor, etc.):
 }
 ```
 
+### Compiler Setup (Optional)
+
+To enable Solidity compilation via the `compile_contract` MCP tool:
+
+```bash
+# Pull the solc Docker image (default: 0.8.20)
+chainvault solc pull
+
+# Or pull a specific version
+chainvault solc pull 0.8.26
+```
+
+Requires [Docker](https://docker.com). Alternatively, install `solc` locally.
+
 ## Supported Chains
 
 14 EVM chains with built-in public RPCs (via [PublicNode](https://publicnode.com/)) -- no API key required.

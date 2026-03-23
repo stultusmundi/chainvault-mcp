@@ -236,6 +236,32 @@ describe('MCP Server Integration (in-process via InMemoryTransport)', () => {
   });
 
   // -----------------------------------------------------------------------
+  // compile_contract tool
+  // -----------------------------------------------------------------------
+  describe('compile_contract tool', () => {
+    it('compile_contract returns structured result or compiler-not-found error', { timeout: 30000 }, async () => {
+      const result = await client.callTool({
+        name: 'compile_contract',
+        arguments: {
+          source_code: 'pragma solidity ^0.8.20; contract Hello { function greet() public pure returns (string memory) { return "hi"; } }',
+          compiler_version: '0.8.20',
+          contract_name: 'Hello',
+        },
+      });
+      const text = (result.content as any)[0].text;
+      const parsed = JSON.parse(text);
+      // Either success with ABI or error about missing compiler — both are valid
+      if (parsed.error) {
+        expect(parsed.error).toMatch(/compiler|solc|docker/i);
+      } else {
+        expect(parsed.abi).toBeDefined();
+        expect(Array.isArray(parsed.abi)).toBe(true);
+        expect(parsed.bytecode).toBeDefined();
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // Stub tools return without error
   // -----------------------------------------------------------------------
   describe('Stub tools return without error', () => {
@@ -291,6 +317,158 @@ describe('MCP Server Integration (in-process via InMemoryTransport)', () => {
       });
       expect(result.content).toBeDefined();
       expect(result.isError).toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Vault tools (with agent context)
+  // -----------------------------------------------------------------------
+  describe('Vault tools (with agent context)', () => {
+    let ctxClient: Client;
+    let ctxServer: ChainVaultServer;
+    let testDir: string;
+
+    beforeAll(async () => {
+      const { mkdtemp } = await import('node:fs/promises');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+      const { MasterVault } = await import('../vault/master-vault.js');
+      const { AgentVaultManager } = await import('../vault/agent-vault.js');
+
+      testDir = await mkdtemp(join(tmpdir(), 'chainvault-mcp-vault-'));
+      await MasterVault.init(testDir, 'test');
+      const vault = await MasterVault.unlock(testDir, 'test');
+      await vault.addKey('test-key', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', [1, 11155111]);
+      const manager = new AgentVaultManager(testDir, vault);
+      const { vaultKey } = await manager.createAgent({
+        name: 'tester',
+        chains: [11155111],
+        tx_rules: { allowed_types: ['read', 'simulate'], limits: {} },
+        api_access: {},
+        contract_rules: { mode: 'none' },
+      }, ['test-key'], []);
+      vault.lock();
+
+      ctxServer = new ChainVaultServer({ basePath: testDir, vaultKey });
+      await ctxServer.init();
+
+      const [ct, st] = InMemoryTransport.createLinkedPair();
+      ctxClient = new Client({ name: 'test-ctx-client', version: '1.0.0' });
+      await ctxServer.getMcpServer().connect(st);
+      await ctxClient.connect(ct);
+    });
+
+    afterAll(async () => {
+      await ctxClient.close();
+      await ctxServer.getMcpServer().close();
+      const { rm } = await import('node:fs/promises');
+      await rm(testDir, { recursive: true, force: true });
+    });
+
+    it('list_chains returns agent allowed chains with metadata', async () => {
+      const result = await ctxClient.callTool({ name: 'list_chains', arguments: {} });
+      const text = (result.content as any)[0].text;
+      const chains = JSON.parse(text);
+      expect(chains).toContainEqual(expect.objectContaining({ chainId: 11155111 }));
+      // Chain 1 is NOT in agent config even though the key supports it
+      expect(chains.find((c: any) => c.chainId === 1)).toBeUndefined();
+    });
+
+    it('list_capabilities returns agent rules summary', async () => {
+      const result = await ctxClient.callTool({ name: 'list_capabilities', arguments: {} });
+      const text = (result.content as any)[0].text;
+      const caps = JSON.parse(text);
+      expect(caps.agent).toBe('tester');
+      expect(caps.allowed_types).toEqual(['read', 'simulate']);
+      expect(caps.chains).toEqual([11155111]);
+    });
+
+    it('get_agent_address returns public address for allowed chain', async () => {
+      const result = await ctxClient.callTool({ name: 'get_agent_address', arguments: { chain_id: 11155111 } });
+      const text = (result.content as any)[0].text;
+      expect(text).toMatch(/^0x[a-fA-F0-9]{40}$/);
+      // Must NOT contain private key material
+      expect(text.toLowerCase()).not.toContain('ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+    });
+
+    it('get_agent_address returns error for unauthorized chain', async () => {
+      const result = await ctxClient.callTool({ name: 'get_agent_address', arguments: { chain_id: 1 } });
+      const text = (result.content as any)[0].text;
+      expect(text).toContain('does not have access');
+    });
+
+    // -----------------------------------------------------------------
+    // Chain read tools
+    // -----------------------------------------------------------------
+    describe('Chain read tools', () => {
+      it('get_balance returns error for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'get_balance',
+          arguments: { chain_id: 1, address: '0x0000000000000000000000000000000000000000' },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
+
+      it('get_balance returns error without agent context', async () => {
+        const result = await client.callTool({
+          name: 'get_balance',
+          arguments: { chain_id: 11155111, address: '0x0000000000000000000000000000000000000000' },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('CHAINVAULT_VAULT_KEY');
+      });
+
+      it('get_transaction returns error for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'get_transaction',
+          arguments: { chain_id: 1, hash: '0xabc' },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
+
+      it('simulate_transaction returns error for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'simulate_transaction',
+          arguments: {
+            chain_id: 1,
+            address: '0x0000000000000000000000000000000000000000',
+            abi: '[]',
+            function_name: 'test',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
+
+      it('get_events returns error for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'get_events',
+          arguments: {
+            chain_id: 1,
+            address: '0x0000000000000000000000000000000000000000',
+            abi: '[]',
+            event_name: 'Transfer',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
+
+      it('get_contract_state returns error for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'get_contract_state',
+          arguments: {
+            chain_id: 1,
+            address: '0x0000000000000000000000000000000000000000',
+            abi: '[]',
+            function_name: 'test',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
     });
   });
 });
