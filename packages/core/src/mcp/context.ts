@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { decrypt } from '../vault/crypto.js';
-import { AgentVaultDataSchema, type AgentVaultData, type AgentConfig } from '../vault/types.js';
+import { AgentVaultDataSchema, type AgentConfig } from '../vault/types.js';
 import { RulesEngine } from '../rules/engine.js';
 import { readFile } from 'node:fs/promises';
 
@@ -17,8 +17,10 @@ export interface AgentContext {
   agentName: string;
   config: AgentConfig;
   rules: RulesEngine;
-  keys: AgentKeyInfo[];
-  vaultData: AgentVaultData;
+  keys: AgentKeyInfo[];  // public addresses only
+  getPrivateKeyForChain(chainId: number): string | null;
+  getApiKey(serviceName: string): { key: string; baseUrl: string } | null;
+  getApiKeyForExplorer(explorerApiUrl: string): { serviceName: string; key: string } | null;
 }
 
 /**
@@ -70,12 +72,42 @@ export async function createAgentContext(
 
       const rules = new RulesEngine(vaultData.config);
 
+      // Controlled accessors — vaultData stays in closure, never exposed
+      const getPrivateKeyForChain = (chainId: number): string | null => {
+        for (const [, key] of Object.entries(vaultData.keys)) {
+          if (key.chains.includes(chainId)) return key.private_key;
+        }
+        return null;
+      };
+
+      const getApiKey = (serviceName: string): { key: string; baseUrl: string } | null => {
+        const entry = vaultData.api_keys[serviceName];
+        return entry ? { key: entry.key, baseUrl: entry.base_url } : null;
+      };
+
+      const getApiKeyForExplorer = (explorerApiUrl: string): { serviceName: string; key: string } | null => {
+        for (const [name, ak] of Object.entries(vaultData.api_keys)) {
+          try {
+            const akHost = new URL(ak.base_url).hostname;
+            const explorerHost = new URL(explorerApiUrl).hostname;
+            const akDomain = akHost.split('.').slice(-2).join('.');
+            const explorerDomain = explorerHost.split('.').slice(-2).join('.');
+            if (akDomain === explorerDomain || akHost.includes(explorerDomain) || explorerHost.includes(akDomain)) {
+              return { serviceName: name, key: ak.key };
+            }
+          } catch { continue; }
+        }
+        return null;
+      };
+
       return {
         agentName: vaultData.agent_name,
         config: vaultData.config,
         rules,
         keys,
-        vaultData,
+        getPrivateKeyForChain,
+        getApiKey,
+        getApiKeyForExplorer,
       };
     } catch {
       // Wrong key for this vault file, try the next one

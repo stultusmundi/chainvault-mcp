@@ -35,6 +35,7 @@ describe('createAgentContext', () => {
     await MasterVault.init(testDir, TEST_PASSWORD);
     const vault = await MasterVault.unlock(testDir, TEST_PASSWORD);
     await vault.addKey('my-wallet', TEST_PRIVATE_KEY, [1, 11155111]);
+    await vault.addApiKey('etherscan', 'TEST_API_KEY', 'https://api.etherscan.io');
 
     const manager = new AgentVaultManager(testDir, vault);
     const result = await manager.createAgent(DEPLOYER_CONFIG, ['my-wallet'], ['etherscan']);
@@ -62,6 +63,37 @@ describe('createAgentContext', () => {
     // Ensure no private key is exposed in the keys array
     const keyAsAny = ctx!.keys[0] as any;
     expect(keyAsAny.private_key).toBeUndefined();
+  });
+
+  it('does not expose vaultData on the context object', async () => {
+    const ctx = await createAgentContext(testDir, vaultKey);
+    const ctxAsAny = ctx as any;
+    expect(ctxAsAny.vaultData).toBeUndefined();
+  });
+
+  it('getPrivateKeyForChain returns a key for an accessible chain', async () => {
+    const ctx = await createAgentContext(testDir, vaultKey);
+    const key = ctx!.getPrivateKeyForChain(11155111);
+    expect(key).toBeTruthy();
+  });
+
+  it('getPrivateKeyForChain returns null for an inaccessible chain', async () => {
+    const ctx = await createAgentContext(testDir, vaultKey);
+    const key = ctx!.getPrivateKeyForChain(999);
+    expect(key).toBeNull();
+  });
+
+  it('getApiKey returns key info for a configured service', async () => {
+    const ctx = await createAgentContext(testDir, vaultKey);
+    const apiKey = ctx!.getApiKey('etherscan');
+    expect(apiKey).not.toBeNull();
+    expect(apiKey!.baseUrl).toBeDefined();
+  });
+
+  it('getApiKey returns null for an unconfigured service', async () => {
+    const ctx = await createAgentContext(testDir, vaultKey);
+    const apiKey = ctx!.getApiKey('nonexistent');
+    expect(apiKey).toBeNull();
   });
 
   it('throws with invalid vault key', async () => {

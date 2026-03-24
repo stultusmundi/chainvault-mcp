@@ -2,6 +2,15 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { compile } from '../../compiler/solidity.js';
 
+/**
+ * Strips potential key material from error messages before returning to agents.
+ * Redacts anything that looks like a private key (0x + 64 hex chars).
+ */
+function sanitizeError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]');
+}
+
 export function registerCompilerTools(server: McpServer): void {
   server.registerTool(
     'compile_contract',
@@ -35,8 +44,8 @@ export function registerCompilerTools(server: McpServer): void {
             }, null, 2),
           }],
         };
-      } catch (e: any) {
-        const msg = e.message || String(e);
+      } catch (e: unknown) {
+        const msg = sanitizeError(e);
         if (msg.includes('docker') || msg.includes('solc') || msg.includes('ENOENT') || msg.includes('not found')) {
           return {
             content: [{

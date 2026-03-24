@@ -6,6 +6,15 @@ import type { AgentContext } from '../context.js';
 
 type ContextGetter = () => AgentContext | null;
 
+/**
+ * Strips potential key material from error messages before returning to agents.
+ * Redacts anything that looks like a private key (0x + 64 hex chars).
+ */
+function sanitizeError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]');
+}
+
 function checkChainAccess(ctx: AgentContext | null, chainId: number): string | null {
   if (!ctx) return 'No agent context. Set CHAINVAULT_VAULT_KEY.';
   const result = ctx.rules.checkTxRequest({ type: 'read', chain_id: chainId, value: '0' });
@@ -31,15 +40,6 @@ function checkWriteAccess(
   return null;
 }
 
-function getPrivateKey(ctx: AgentContext, chainId: number): string | null {
-  for (const [, key] of Object.entries(ctx.vaultData.keys)) {
-    if (key.chains.includes(chainId)) {
-      return key.private_key;
-    }
-  }
-  return null;
-}
-
 export function registerChainTools(server: McpServer, getContext: ContextGetter): void {
   // ---------------------------------------------------------------------------
   // Tier 2 write tools
@@ -62,7 +62,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
       const err = checkWriteAccess(ctx, chain_id, 'deploy');
       if (err) return { content: [{ type: 'text' as const, text: err }] };
 
-      const privateKey = getPrivateKey(ctx!, chain_id);
+      const privateKey = ctx!.getPrivateKeyForChain(chain_id);
       if (!privateKey) return { content: [{ type: 'text' as const, text: `No key available for chain ${chain_id}.` }] };
 
       try {
@@ -80,8 +80,8 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
             contractAddress: result.address ?? null,
           }, null, 2) }],
         };
-      } catch (e: any) {
-        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
   );
@@ -105,7 +105,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
       const err = checkWriteAccess(ctx, chain_id, 'write', value ?? '0', address);
       if (err) return { content: [{ type: 'text' as const, text: err }] };
 
-      const privateKey = getPrivateKey(ctx!, chain_id);
+      const privateKey = ctx!.getPrivateKeyForChain(chain_id);
       if (!privateKey) return { content: [{ type: 'text' as const, text: `No key available for chain ${chain_id}.` }] };
 
       try {
@@ -122,8 +122,8 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({ hash: result.hash }, null, 2) }],
         };
-      } catch (e: any) {
-        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
   );
@@ -152,29 +152,16 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         return { content: [{ type: 'text' as const, text: `No block explorer API configured for chain ${chain_id}.` }] };
       }
 
-      // Find an API key for this explorer
+      // Find an API key for this explorer via controlled accessor
       const explorerApiUrl = chainConfig.blockExplorer.apiUrl;
-      let apiKey: string | null = null;
-      for (const [, ak] of Object.entries(ctx.vaultData.api_keys)) {
-        try {
-          const akHost = new URL(ak.base_url).hostname;
-          const explorerHost = new URL(explorerApiUrl).hostname;
-          // Match on domain root (e.g., etherscan.io matches api.etherscan.io)
-          if (akHost.includes(explorerHost.split('.').slice(-2).join('.')) ||
-              explorerHost.includes(akHost.split('.').slice(-2).join('.'))) {
-            apiKey = ak.key;
-            break;
-          }
-        } catch { continue; }
-      }
-
-      if (!apiKey) {
+      const apiKeyMatch = ctx.getApiKeyForExplorer(explorerApiUrl);
+      if (!apiKeyMatch) {
         return { content: [{ type: 'text' as const, text: `No API key configured for ${chainConfig.blockExplorer.name}. Add one via the TUI or CLI.` }] };
       }
 
       try {
         const params = new URLSearchParams({
-          apikey: apiKey,
+          apikey: apiKeyMatch.key,
           module: 'contract',
           action: 'verifysourcecode',
           contractaddress: address,
@@ -192,8 +179,8 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         });
         const data = await response.json();
         return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
-      } catch (e: any) {
-        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
   );
@@ -221,8 +208,8 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         const adapter = EvmAdapter.fromChainId(chain_id);
         const balance = await adapter.getBalance(address);
         return { content: [{ type: 'text' as const, text: JSON.stringify(balance, null, 2) }] };
-      } catch (e: any) {
-        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
   );
@@ -255,8 +242,8 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
           args: args ?? [],
         });
         return { content: [{ type: 'text' as const, text: JSON.stringify({ result }, null, 2) }] };
-      } catch (e: any) {
-        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
   );
@@ -297,8 +284,8 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
           value,
         });
         return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (e: any) {
-        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
   );
@@ -333,8 +320,8 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
           toBlock: to_block !== undefined ? BigInt(to_block) : undefined,
         });
         return { content: [{ type: 'text' as const, text: JSON.stringify(events, null, 2) }] };
-      } catch (e: any) {
-        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
   );
@@ -358,8 +345,8 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         const adapter = EvmAdapter.fromChainId(chain_id);
         const tx = await adapter.getTransaction(hash);
         return { content: [{ type: 'text' as const, text: JSON.stringify(tx, null, 2) }] };
-      } catch (e: any) {
-        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
   );

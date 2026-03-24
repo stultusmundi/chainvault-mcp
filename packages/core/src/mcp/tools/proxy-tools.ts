@@ -8,6 +8,15 @@ type ContextGetter = () => AgentContext | null;
 
 const proxy = new ApiProxy();
 
+/**
+ * Strips potential key material from error messages before returning to agents.
+ * Redacts anything that looks like a private key (0x + 64 hex chars).
+ */
+function sanitizeError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]');
+}
+
 export function registerProxyTools(server: McpServer, getContext: ContextGetter): void {
   server.registerTool(
     'query_explorer',
@@ -31,27 +40,13 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter)
         return { content: [{ type: 'text' as const, text: `No block explorer API configured for chain ${chain_id}.` }] };
       }
 
-      // Find API key matching this explorer
+      // Find API key matching this explorer via controlled accessor
       const explorerApiUrl = chainConfig.blockExplorer.apiUrl;
-      let serviceName: string | null = null;
-      let apiKeyValue: string | null = null;
-
-      for (const [name, ak] of Object.entries(ctx.vaultData.api_keys)) {
-        try {
-          const akHost = new URL(ak.base_url).hostname;
-          const explorerHost = new URL(explorerApiUrl).hostname;
-          if (akHost.includes(explorerHost.split('.').slice(-2).join('.')) ||
-              explorerHost.includes(akHost.split('.').slice(-2).join('.'))) {
-            serviceName = name;
-            apiKeyValue = ak.key;
-            break;
-          }
-        } catch { continue; }
-      }
-
-      if (!serviceName || !apiKeyValue) {
+      const apiKeyMatch = ctx.getApiKeyForExplorer(explorerApiUrl);
+      if (!apiKeyMatch) {
         return { content: [{ type: 'text' as const, text: `No API key configured for ${chainConfig.blockExplorer.name}. Add one via the TUI or CLI.` }] };
       }
+      const { serviceName, key: apiKeyValue } = apiKeyMatch;
 
       // Check API access rules
       const apiCheck = ctx.rules.checkApiRequest({ service: serviceName, endpoint: action });
@@ -71,8 +66,8 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter)
           rateLimits,
         });
         return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (e: any) {
-        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
   );
@@ -97,8 +92,8 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter)
         }
         const data = await response.json();
         return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
-      } catch (e: any) {
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ error: e.message }) }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ error: sanitizeError(e) }) }] };
       }
     },
   );
