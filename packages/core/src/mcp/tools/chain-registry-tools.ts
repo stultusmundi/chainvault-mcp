@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { AuditFn } from '../audit-fn.js';
 import { SUPPORTED_CHAINS, getChainConfig, getChainsWithFaucets } from '../../chain/chains.js';
 import { requestFaucet, getFaucetInfo } from '../../chain/faucet.js';
 
-export function registerChainRegistryTools(server: McpServer): void {
+const noop: AuditFn = () => {};
+
+export function registerChainRegistryTools(server: McpServer, audit: AuditFn = noop): void {
   server.registerTool(
     'list_supported_chains',
     {
@@ -28,6 +31,7 @@ export function registerChainRegistryTools(server: McpServer): void {
         blockExplorer: c.blockExplorer?.url ?? null,
       }));
 
+      audit({ action: 'list_supported_chains', status: 'approved', details: `Listed ${result.length} chains (filter: ${network ?? 'all'})` });
       return {
         content: [{
           type: 'text' as const,
@@ -49,6 +53,7 @@ export function registerChainRegistryTools(server: McpServer): void {
     },
     async ({ chain_id, address }) => {
       const result = await requestFaucet(chain_id, address);
+      audit({ action: 'request_faucet', chain_id, status: 'approved', details: `Faucet request for chain ${chain_id}` });
       return {
         content: [{
           type: 'text' as const,

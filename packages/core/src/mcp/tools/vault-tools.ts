@@ -1,11 +1,14 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AgentContext } from '../context.js';
+import type { AuditFn } from '../audit-fn.js';
 import { getChainConfig } from '../../chain/chains.js';
 
 type ContextGetter = () => AgentContext | null;
 
-export function registerVaultTools(server: McpServer, getContext: ContextGetter): void {
+const noop: AuditFn = () => {};
+
+export function registerVaultTools(server: McpServer, getContext: ContextGetter, audit: AuditFn = noop): void {
   server.registerTool(
     'list_chains',
     {
@@ -16,6 +19,7 @@ export function registerVaultTools(server: McpServer, getContext: ContextGetter)
     async () => {
       const ctx = getContext();
       if (!ctx) {
+        audit({ action: 'list_chains', status: 'denied', details: 'No agent context' });
         return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
       }
 
@@ -32,6 +36,7 @@ export function registerVaultTools(server: McpServer, getContext: ContextGetter)
         return { chainId, name: 'Unknown', network: 'unknown', nativeCurrency: 'unknown' };
       });
 
+      audit({ action: 'list_chains', status: 'approved', details: `Listed ${chains.length} chains` });
       return { content: [{ type: 'text' as const, text: JSON.stringify(chains, null, 2) }] };
     },
   );
@@ -46,6 +51,7 @@ export function registerVaultTools(server: McpServer, getContext: ContextGetter)
     async () => {
       const ctx = getContext();
       if (!ctx) {
+        audit({ action: 'list_capabilities', status: 'denied', details: 'No agent context' });
         return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
       }
 
@@ -57,6 +63,7 @@ export function registerVaultTools(server: McpServer, getContext: ContextGetter)
         contract_rules: ctx.config.contract_rules.mode,
       };
 
+      audit({ action: 'list_capabilities', status: 'approved', details: 'Listed agent capabilities' });
       return { content: [{ type: 'text' as const, text: JSON.stringify(capabilities, null, 2) }] };
     },
   );
@@ -73,18 +80,22 @@ export function registerVaultTools(server: McpServer, getContext: ContextGetter)
     async ({ chain_id }) => {
       const ctx = getContext();
       if (!ctx) {
+        audit({ action: 'get_agent_address', chain_id, status: 'denied', details: 'No agent context' });
         return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
       }
 
       if (!ctx.config.chains.includes(chain_id)) {
+        audit({ action: 'get_agent_address', chain_id, status: 'denied', details: `Chain ${chain_id} not allowed` });
         return { content: [{ type: 'text' as const, text: `Agent does not have access to chain ${chain_id}.` }] };
       }
 
       const key = ctx.keys.find((k) => k.chains.includes(chain_id));
       if (!key) {
+        audit({ action: 'get_agent_address', chain_id, status: 'denied', details: `No key for chain ${chain_id}` });
         return { content: [{ type: 'text' as const, text: `No key available for chain ${chain_id}.` }] };
       }
 
+      audit({ action: 'get_agent_address', chain_id, status: 'approved', details: 'Returned public address' });
       return { content: [{ type: 'text' as const, text: key.address }] };
     },
   );

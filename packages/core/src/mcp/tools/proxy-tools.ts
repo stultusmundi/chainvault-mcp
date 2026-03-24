@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AgentContext } from '../context.js';
+import type { AuditFn } from '../audit-fn.js';
 import { getChainConfig } from '../../chain/chains.js';
 import { ApiProxy } from '../../proxy/api-proxy.js';
 
 type ContextGetter = () => AgentContext | null;
 
 const proxy = new ApiProxy();
+const noop: AuditFn = () => {};
 
 /**
  * Strips potential key material from error messages before returning to agents.
@@ -17,7 +19,7 @@ function sanitizeError(err: unknown): string {
   return msg.replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]');
 }
 
-export function registerProxyTools(server: McpServer, getContext: ContextGetter): void {
+export function registerProxyTools(server: McpServer, getContext: ContextGetter, audit: AuditFn = noop): void {
   server.registerTool(
     'query_explorer',
     {
@@ -32,11 +34,15 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter)
     },
     async ({ chain_id, module: mod, action, params: extraParams }) => {
       const ctx = getContext();
-      if (!ctx) return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
+      if (!ctx) {
+        audit({ action: 'query_explorer', chain_id, status: 'denied', details: 'No agent context' });
+        return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
+      }
 
       // Find explorer API URL from chain config
       const chainConfig = getChainConfig(chain_id);
       if (!chainConfig?.blockExplorer?.apiUrl) {
+        audit({ action: 'query_explorer', chain_id, status: 'denied', details: 'No explorer API for chain' });
         return { content: [{ type: 'text' as const, text: `No block explorer API configured for chain ${chain_id}.` }] };
       }
 
@@ -44,6 +50,7 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter)
       const explorerApiUrl = chainConfig.blockExplorer.apiUrl;
       const apiKeyMatch = ctx.getApiKeyForExplorer(explorerApiUrl);
       if (!apiKeyMatch) {
+        audit({ action: 'query_explorer', chain_id, status: 'denied', details: 'No API key for explorer' });
         return { content: [{ type: 'text' as const, text: `No API key configured for ${chainConfig.blockExplorer.name}. Add one via the TUI or CLI.` }] };
       }
       const { serviceName, key: apiKeyValue } = apiKeyMatch;
@@ -51,6 +58,7 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter)
       // Check API access rules
       const apiCheck = ctx.rules.checkApiRequest({ service: serviceName, endpoint: action });
       if (!apiCheck.approved) {
+        audit({ action: 'query_explorer', chain_id, status: 'denied', details: apiCheck.reason ?? 'API access denied' });
         return { content: [{ type: 'text' as const, text: apiCheck.reason ?? 'API access denied.' }] };
       }
 
@@ -65,8 +73,10 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter)
           apiKey: apiKeyValue,
           rateLimits,
         });
+        audit({ action: 'query_explorer', chain_id, status: 'approved', details: `Queried ${mod}.${action}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e: unknown) {
+        audit({ action: 'query_explorer', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -88,11 +98,14 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter)
         const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(token_id)}&vs_currencies=${encodeURIComponent(cur)}`;
         const response = await fetch(url);
         if (!response.ok) {
+          audit({ action: 'query_price', status: 'approved', details: `CoinGecko error: ${response.status}` });
           return { content: [{ type: 'text' as const, text: JSON.stringify({ error: `CoinGecko API error: ${response.status}` }) }] };
         }
         const data = await response.json();
+        audit({ action: 'query_price', status: 'approved', details: `Price for ${token_id}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
       } catch (e: unknown) {
+        audit({ action: 'query_price', status: 'approved', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify({ error: sanitizeError(e) }) }] };
       }
     },

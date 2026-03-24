@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { AuditFn } from '../audit-fn.js';
 import { compile } from '../../compiler/solidity.js';
 
 /**
@@ -11,7 +12,9 @@ function sanitizeError(err: unknown): string {
   return msg.replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]');
 }
 
-export function registerCompilerTools(server: McpServer): void {
+const noop: AuditFn = () => {};
+
+export function registerCompilerTools(server: McpServer, audit: AuditFn = noop): void {
   server.registerTool(
     'compile_contract',
     {
@@ -34,6 +37,7 @@ export function registerCompilerTools(server: McpServer): void {
           optimization ?? true,
           optimization_runs ?? 200,
         );
+        audit({ action: 'compile_contract', status: 'approved', details: `Compiled ${contract_name} (solc ${compiler_version})` });
         return {
           content: [{
             type: 'text' as const,
@@ -46,6 +50,7 @@ export function registerCompilerTools(server: McpServer): void {
         };
       } catch (e: unknown) {
         const msg = sanitizeError(e);
+        audit({ action: 'compile_contract', status: 'approved', details: `Error: ${msg.slice(0, 100)}` });
         if (msg.includes('docker') || msg.includes('solc') || msg.includes('ENOENT') || msg.includes('not found')) {
           return {
             content: [{
