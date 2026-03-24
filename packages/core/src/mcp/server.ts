@@ -51,7 +51,7 @@ export class ChainVaultServer {
 
     registerVaultTools(this.mcpServer, getContext);
     registerChainTools(this.mcpServer, getContext);
-    registerProxyTools(this.mcpServer);
+    registerProxyTools(this.mcpServer, getContext);
     registerCompilerTools(this.mcpServer);
     registerChainRegistryTools(this.mcpServer);
 

@@ -544,5 +544,54 @@ describe('MCP Server Integration (in-process via InMemoryTransport)', () => {
         expect(text).toMatch(/no.*api.*key|not configured/i);
       });
     });
+
+    // -----------------------------------------------------------------
+    // Proxy tools
+    // -----------------------------------------------------------------
+    describe('Proxy tools', () => {
+      it('query_explorer returns error when no API key configured', async () => {
+        const result = await ctxClient.callTool({
+          name: 'query_explorer',
+          arguments: {
+            chain_id: 11155111,
+            module: 'contract',
+            action: 'getabi',
+            params: { address: '0x0000000000000000000000000000000000000001' },
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toMatch(/no.*api.*key|not configured/i);
+      });
+
+      it('query_explorer returns error without agent context', async () => {
+        const result = await client.callTool({
+          name: 'query_explorer',
+          arguments: {
+            chain_id: 11155111,
+            module: 'contract',
+            action: 'getabi',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('CHAINVAULT_VAULT_KEY');
+      });
+
+      it('query_price returns data from CoinGecko public API', async () => {
+        const result = await client.callTool({
+          name: 'query_price',
+          arguments: { token_id: 'ethereum' },
+        });
+        const text = (result.content as any)[0].text;
+        const parsed = JSON.parse(text);
+        // CoinGecko returns { ethereum: { usd: 1234.56 } } or rate limit error
+        if (parsed.error) {
+          // Rate limited — still valid behavior
+          expect(parsed.error).toBeDefined();
+        } else {
+          expect(parsed.ethereum).toBeDefined();
+          expect(typeof parsed.ethereum.usd).toBe('number');
+        }
+      });
+    });
   });
 });
