@@ -470,5 +470,63 @@ describe('MCP Server Integration (in-process via InMemoryTransport)', () => {
         expect(text).toContain('does not have access');
       });
     });
+
+    // -----------------------------------------------------------------
+    // Chain write tools (rules enforcement)
+    // -----------------------------------------------------------------
+    describe('Chain write tools (rules enforcement)', () => {
+      it('deploy_contract denied when agent lacks deploy permission', async () => {
+        const result = await ctxClient.callTool({
+          name: 'deploy_contract',
+          arguments: {
+            chain_id: 11155111,
+            abi: '[{"inputs":[],"stateMutability":"nonpayable","type":"constructor"}]',
+            bytecode: '0x608060405234801561001057600080fd5b50',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('not allowed');
+      });
+
+      it('interact_contract denied when agent lacks write permission', async () => {
+        const result = await ctxClient.callTool({
+          name: 'interact_contract',
+          arguments: {
+            chain_id: 11155111,
+            address: '0x0000000000000000000000000000000000000001',
+            abi: '[{"inputs":[],"name":"foo","outputs":[],"stateMutability":"nonpayable","type":"function"}]',
+            function_name: 'foo',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('not allowed');
+      });
+
+      it('deploy_contract denied for unauthorized chain', async () => {
+        const result = await ctxClient.callTool({
+          name: 'deploy_contract',
+          arguments: {
+            chain_id: 1,
+            abi: '[]',
+            bytecode: '0x00',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('does not have access');
+      });
+
+      it('deploy_contract returns error without agent context', async () => {
+        const result = await client.callTool({
+          name: 'deploy_contract',
+          arguments: {
+            chain_id: 11155111,
+            abi: '[]',
+            bytecode: '0x00',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        expect(text).toContain('CHAINVAULT_VAULT_KEY');
+      });
+    });
   });
 });

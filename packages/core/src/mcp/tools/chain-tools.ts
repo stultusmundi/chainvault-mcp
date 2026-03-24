@@ -12,9 +12,36 @@ function checkChainAccess(ctx: AgentContext | null, chainId: number): string | n
   return null;
 }
 
+function checkWriteAccess(
+  ctx: AgentContext | null,
+  chainId: number,
+  txType: 'deploy' | 'write' | 'transfer',
+  value: string = '0',
+  toAddress?: string,
+): string | null {
+  if (!ctx) return 'No agent context. Set CHAINVAULT_VAULT_KEY.';
+  const result = ctx.rules.checkTxRequest({
+    type: txType,
+    chain_id: chainId,
+    value,
+    to_address: toAddress,
+  });
+  if (!result.approved) return result.reason ?? 'Operation denied.';
+  return null;
+}
+
+function getPrivateKey(ctx: AgentContext, chainId: number): string | null {
+  for (const [, key] of Object.entries(ctx.vaultData.keys)) {
+    if (key.chains.includes(chainId)) {
+      return key.private_key;
+    }
+  }
+  return null;
+}
+
 export function registerChainTools(server: McpServer, getContext: ContextGetter): void {
   // ---------------------------------------------------------------------------
-  // Tier 2 stubs (not yet wired)
+  // Tier 2 write tools
   // ---------------------------------------------------------------------------
 
   server.registerTool(
@@ -29,8 +56,32 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         constructor_args: z.array(z.any()).optional().describe('Constructor arguments'),
       }),
     },
-    async () => {
-      return { content: [{ type: 'text' as const, text: 'Not yet implemented. Coming in Tier 2.' }] };
+    async ({ chain_id, abi, bytecode, constructor_args }) => {
+      const ctx = getContext();
+      const err = checkWriteAccess(ctx, chain_id, 'deploy');
+      if (err) return { content: [{ type: 'text' as const, text: err }] };
+
+      const privateKey = getPrivateKey(ctx!, chain_id);
+      if (!privateKey) return { content: [{ type: 'text' as const, text: `No key available for chain ${chain_id}.` }] };
+
+      try {
+        const adapter = EvmAdapter.fromChainId(chain_id);
+        const parsedAbi = JSON.parse(abi);
+        const result = await adapter.deployContract({
+          abi: parsedAbi,
+          bytecode,
+          args: constructor_args,
+          privateKey,
+        });
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            hash: result.hash,
+            contractAddress: result.address ?? null,
+          }, null, 2) }],
+        };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      }
     },
   );
 
@@ -48,8 +99,31 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         value: z.string().optional().describe('Native token value to send (in ETH)'),
       }),
     },
-    async () => {
-      return { content: [{ type: 'text' as const, text: 'Not yet implemented. Coming in Tier 2.' }] };
+    async ({ chain_id, address, abi, function_name, args, value }) => {
+      const ctx = getContext();
+      const err = checkWriteAccess(ctx, chain_id, 'write', value ?? '0', address);
+      if (err) return { content: [{ type: 'text' as const, text: err }] };
+
+      const privateKey = getPrivateKey(ctx!, chain_id);
+      if (!privateKey) return { content: [{ type: 'text' as const, text: `No key available for chain ${chain_id}.` }] };
+
+      try {
+        const adapter = EvmAdapter.fromChainId(chain_id);
+        const parsedAbi = JSON.parse(abi);
+        const result = await adapter.writeContract({
+          address,
+          abi: parsedAbi,
+          functionName: function_name,
+          args: args ?? [],
+          privateKey,
+          value,
+        });
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ hash: result.hash }, null, 2) }],
+        };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      }
     },
   );
 
