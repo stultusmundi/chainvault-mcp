@@ -527,6 +527,22 @@ describe('MCP Server Integration (in-process via InMemoryTransport)', () => {
         const text = (result.content as any)[0].text;
         expect(text).toContain('CHAINVAULT_VAULT_KEY');
       });
+
+      it('verify_contract returns error when no API key configured', async () => {
+        const result = await ctxClient.callTool({
+          name: 'verify_contract',
+          arguments: {
+            chain_id: 11155111,
+            address: '0x0000000000000000000000000000000000000001',
+            source_code: 'pragma solidity ^0.8.20; contract X {}',
+            contract_name: 'X',
+            compiler_version: '0.8.20',
+          },
+        });
+        const text = (result.content as any)[0].text;
+        // Agent has no API keys configured, so this should fail gracefully
+        expect(text).toMatch(/no.*api.*key|not configured/i);
+      });
     });
   });
 });

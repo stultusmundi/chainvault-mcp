@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { EvmAdapter } from '../../chain/evm-adapter.js';
+import { getChainConfig } from '../../chain/chains.js';
 import type { AgentContext } from '../context.js';
 
 type ContextGetter = () => AgentContext | null;
@@ -141,8 +142,59 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
         optimization: z.boolean().optional().describe('Whether optimization was enabled'),
       }),
     },
-    async () => {
-      return { content: [{ type: 'text' as const, text: 'Not yet implemented. Coming in Tier 2.' }] };
+    async ({ chain_id, address, source_code, contract_name, compiler_version, optimization }) => {
+      const ctx = getContext();
+      if (!ctx) return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
+
+      // Find explorer API URL from chain config
+      const chainConfig = getChainConfig(chain_id);
+      if (!chainConfig?.blockExplorer?.apiUrl) {
+        return { content: [{ type: 'text' as const, text: `No block explorer API configured for chain ${chain_id}.` }] };
+      }
+
+      // Find an API key for this explorer
+      const explorerApiUrl = chainConfig.blockExplorer.apiUrl;
+      let apiKey: string | null = null;
+      for (const [, ak] of Object.entries(ctx.vaultData.api_keys)) {
+        try {
+          const akHost = new URL(ak.base_url).hostname;
+          const explorerHost = new URL(explorerApiUrl).hostname;
+          // Match on domain root (e.g., etherscan.io matches api.etherscan.io)
+          if (akHost.includes(explorerHost.split('.').slice(-2).join('.')) ||
+              explorerHost.includes(akHost.split('.').slice(-2).join('.'))) {
+            apiKey = ak.key;
+            break;
+          }
+        } catch { continue; }
+      }
+
+      if (!apiKey) {
+        return { content: [{ type: 'text' as const, text: `No API key configured for ${chainConfig.blockExplorer.name}. Add one via the TUI or CLI.` }] };
+      }
+
+      try {
+        const params = new URLSearchParams({
+          apikey: apiKey,
+          module: 'contract',
+          action: 'verifysourcecode',
+          contractaddress: address,
+          sourceCode: source_code,
+          codeformat: 'solidity-single-file',
+          contractname: contract_name,
+          compilerversion: `v${compiler_version}`,
+          optimizationUsed: optimization ? '1' : '0',
+        });
+
+        const response = await fetch(`${explorerApiUrl}/api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        });
+        const data = await response.json();
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }] };
+      }
     },
   );
 
