@@ -74,6 +74,8 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
           args: constructor_args,
           privateKey,
         });
+        // Record spend for limit tracking
+        ctx!.rules.recordSpend(chain_id, 0);
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({
             hash: result.hash,
@@ -119,6 +121,9 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter)
           privateKey,
           value,
         });
+        // Record spend for limit tracking
+        const spendValue = parseFloat(value ?? '0');
+        ctx!.rules.recordSpend(chain_id, spendValue);
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({ hash: result.hash }, null, 2) }],
         };
