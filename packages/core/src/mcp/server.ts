@@ -5,6 +5,9 @@ import { registerProxyTools } from './tools/proxy-tools.js';
 import { registerCompilerTools } from './tools/compiler-tools.js';
 import { registerChainRegistryTools } from './tools/chain-registry-tools.js';
 import { createAgentContext, type AgentContext } from './context.js';
+import { ChainVaultDB } from '../db/database.js';
+import { AuditStore } from '../db/audit-store.js';
+import type { AuditFn } from './audit-fn.js';
 
 interface ServerConfig {
   basePath: string;
@@ -16,6 +19,8 @@ export class ChainVaultServer {
   private registeredTools: string[] = [];
   private config: ServerConfig;
   private agentContext: AgentContext | null = null;
+  private auditStore: AuditStore | null = null;
+  private db: ChainVaultDB | null = null;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -37,6 +42,9 @@ export class ChainVaultServer {
       this.config.basePath,
       this.config.vaultKey || process.env.CHAINVAULT_VAULT_KEY,
     );
+
+    this.db = new ChainVaultDB(this.config.basePath);
+    this.auditStore = new AuditStore(this.db);
   }
 
   private registerAllTools(): void {
@@ -49,11 +57,25 @@ export class ChainVaultServer {
 
     const getContext = () => this.agentContext;
 
-    registerVaultTools(this.mcpServer, getContext);
-    registerChainTools(this.mcpServer, getContext);
-    registerProxyTools(this.mcpServer);
-    registerCompilerTools(this.mcpServer);
-    registerChainRegistryTools(this.mcpServer);
+    // Lazy audit function — resolves agent name and AuditStore at call time
+    // so it works even though tools are registered before init() is called.
+    const audit: AuditFn = (entry) => {
+      if (!this.auditStore) return;
+      const agentName = this.agentContext?.agentName ?? 'unknown';
+      this.auditStore.log({
+        agent: agentName,
+        action: entry.action,
+        chain_id: entry.chain_id ?? 0,
+        status: entry.status,
+        details: entry.details,
+      });
+    };
+
+    registerVaultTools(this.mcpServer, getContext, audit);
+    registerChainTools(this.mcpServer, getContext, audit);
+    registerProxyTools(this.mcpServer, getContext, audit);
+    registerCompilerTools(this.mcpServer, audit);
+    registerChainRegistryTools(this.mcpServer, audit);
 
     // Restore original
     this.mcpServer.registerTool = originalRegister;
