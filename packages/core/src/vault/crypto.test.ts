@@ -5,6 +5,7 @@ import {
   decrypt,
   generateRandomKey,
   generateVaultKeyString,
+  wipeBuffer,
 } from './crypto.js';
 
 describe('deriveKeyFromPassword', () => {
@@ -101,5 +102,18 @@ describe('generateVaultKeyString', () => {
     const { keyString, keyBuffer } = generateVaultKeyString();
     const hexPart = keyString.replace('cv_agent_', '');
     expect(keyBuffer.toString('hex')).toBe(hexPart);
+  });
+});
+
+describe('wipeBuffer', () => {
+  it('fills buffer with zeros', () => {
+    const buf = Buffer.from('secret-key-material');
+    wipeBuffer(buf);
+    expect(buf.every((b) => b === 0)).toBe(true);
+  });
+
+  it('handles null/undefined gracefully', () => {
+    expect(() => wipeBuffer(null as any)).not.toThrow();
+    expect(() => wipeBuffer(undefined as any)).not.toThrow();
   });
 });

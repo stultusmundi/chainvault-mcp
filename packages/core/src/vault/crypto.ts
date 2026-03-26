@@ -91,3 +91,10 @@ export function generateVaultKeyString(): {
   const keyString = `cv_agent_${keyBuffer.toString('hex')}`;
   return { keyString, keyBuffer };
 }
+
+/**
+ * Wipes a Buffer by filling with zeros. Safe to call with null/undefined.
+ */
+export function wipeBuffer(buf: Buffer | null | undefined): void {
+  if (buf) buf.fill(0);
+}
