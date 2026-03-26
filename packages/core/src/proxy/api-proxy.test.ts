@@ -90,6 +90,54 @@ describe('ApiProxy', () => {
     expect(usage.totalRequests).toBe(1);
   });
 
+  it('retries on transient failure then succeeds', async () => {
+    mockFetch
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ result: 'recovered' }),
+      });
+
+    const result = await proxy.request({
+      baseUrl: 'https://api.etherscan.io',
+      endpoint: '/api',
+      params: { action: 'test' },
+      apiKey: 'KEY',
+      retries: 2,
+    });
+    expect(result.result).toBe('recovered');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws after exhausting retries', async () => {
+    mockFetch.mockRejectedValue(new Error('network error'));
+
+    await expect(
+      proxy.request({
+        baseUrl: 'https://api.etherscan.io',
+        endpoint: '/api',
+        params: {},
+        apiKey: 'KEY',
+        retries: 2,
+      }),
+    ).rejects.toThrow('network error');
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('applies request timeout', async () => {
+    mockFetch.mockImplementation(() => new Promise(() => {}));
+
+    await expect(
+      proxy.request({
+        baseUrl: 'https://api.etherscan.io',
+        endpoint: '/api',
+        params: {},
+        apiKey: 'KEY',
+        timeoutMs: 50,
+      }),
+    ).rejects.toThrow();
+  });
+
   it('throws on non-ok response', async () => {
     mockFetch.mockResolvedValue({
       ok: false,

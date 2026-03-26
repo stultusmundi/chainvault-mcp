@@ -4,6 +4,8 @@ interface RequestParams {
   params: Record<string, string>;
   apiKey: string;
   rateLimits?: { per_second: number; daily: number };
+  timeoutMs?: number;
+  retries?: number;
 }
 
 interface UsageInfo {
@@ -45,21 +47,44 @@ export class ApiProxy {
     }
     url.searchParams.set('apikey', params.apiKey);
 
-    // Make request
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    // Make request with retry and timeout support
+    const maxAttempts = (params.retries ?? 0) + 1;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const fetchPromise = fetch(url.toString());
+        let response: Response;
+        if (params.timeoutMs) {
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error(`Request timed out after ${params.timeoutMs}ms`)), params.timeoutMs);
+          });
+          response = await Promise.race([fetchPromise, timeoutPromise]);
+        } else {
+          response = await fetchPromise;
+        }
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Cache result
+        this.cache.set(cacheKey, { data, expiry: Date.now() + ApiProxy.CACHE_TTL });
+
+        // Track usage
+        this.trackUsage(params.baseUrl);
+
+        return data;
+      } catch (err: any) {
+        lastError = err;
+        if (attempt < maxAttempts - 1) {
+          await new Promise((r) => setTimeout(r, 100 * (attempt + 1)));
+        }
+      }
     }
 
-    const data = await response.json();
-
-    // Cache result
-    this.cache.set(cacheKey, { data, expiry: Date.now() + ApiProxy.CACHE_TTL });
-
-    // Track usage
-    this.trackUsage(params.baseUrl);
-
-    return data;
+    throw lastError!;
   }
 
   getUsage(baseUrl: string): UsageInfo {
