@@ -132,3 +132,45 @@ describe('EvmAdapter.fromChainId', () => {
     expect(fallbackFn).toHaveBeenCalled();
   });
 });
+
+describe('EvmAdapter - Decimal ETH value handling (parseEther)', () => {
+  let adapter: ChainAdapter;
+
+  beforeEach(() => {
+    adapter = new EvmAdapter('https://rpc.example.com', 11155111);
+  });
+
+  it('estimates gas with decimal ETH value', async () => {
+    const estimate = await adapter.estimateGas({
+      to: '0x1234567890abcdef1234567890abcdef12345678',
+      value: '0.5',
+    });
+    expect(estimate.gasLimit).toBeDefined();
+    expect(estimate.gasPriceGwei).toBeDefined();
+    expect(estimate.estimatedCostEth).toBeDefined();
+
+    // Verify parseEther conversion: 0.5 ETH = 500000000000000000 wei
+    const { parseEther, createPublicClient } = await import('viem');
+    const mockClient = (createPublicClient as any).mock.results.at(-1).value;
+    expect(mockClient.estimateGas).toHaveBeenCalledWith(
+      expect.objectContaining({ value: parseEther('0.5') }),
+    );
+  });
+
+  it('estimates gas with integer ETH value', async () => {
+    const estimate = await adapter.estimateGas({
+      to: '0x1234567890abcdef1234567890abcdef12345678',
+      value: '1',
+    });
+    expect(estimate.gasLimit).toBeDefined();
+    expect(estimate.gasPriceGwei).toBeDefined();
+    expect(estimate.estimatedCostEth).toBeDefined();
+
+    // Verify parseEther conversion: 1 ETH = 1000000000000000000 wei (not BigInt('1') = 1n)
+    const { parseEther, createPublicClient } = await import('viem');
+    const mockClient = (createPublicClient as any).mock.results.at(-1).value;
+    expect(mockClient.estimateGas).toHaveBeenCalledWith(
+      expect.objectContaining({ value: parseEther('1') }),
+    );
+  });
+});
