@@ -107,6 +107,54 @@ export class AgentVaultManager {
     return { vaultKey: keyString };
   }
 
+  async regenerateAgent(
+    agentName: string,
+    currentVaultKey: string,
+    grantedKeys: string[],
+    grantedApiKeys: string[],
+  ): Promise<{ vaultKey: string }> {
+    // Verify old key works (proves caller has access)
+    await this.openAgentVault(agentName, currentVaultKey);
+
+    // Read updated config from master vault
+    const masterData = this.masterVault.getData();
+    const config = masterData.agents[agentName];
+    if (!config) throw new Error(`Agent '${agentName}' not found in master vault`);
+
+    // Build fresh agent vault data with current secrets
+    const keys: AgentVaultData['keys'] = {};
+    for (const keyName of grantedKeys) {
+      if (masterData.keys[keyName]) keys[keyName] = masterData.keys[keyName];
+    }
+
+    const apiKeys: AgentVaultData['api_keys'] = {};
+    for (const apiKeyName of grantedApiKeys) {
+      if (masterData.api_keys[apiKeyName]) apiKeys[apiKeyName] = masterData.api_keys[apiKeyName];
+    }
+
+    const rpcEndpoints: AgentVaultData['rpc_endpoints'] = {};
+    for (const [name, ep] of Object.entries(masterData.rpc_endpoints)) {
+      if (config.chains.includes(ep.chain_id)) rpcEndpoints[name] = ep;
+    }
+
+    const agentVaultData: AgentVaultData = {
+      version: 1,
+      agent_name: agentName,
+      config,
+      keys,
+      api_keys: apiKeys,
+      rpc_endpoints: rpcEndpoints,
+    };
+
+    const { keyString, keyBuffer } = generateVaultKeyString();
+    const encrypted = encrypt(JSON.stringify(agentVaultData), keyBuffer);
+    wipeBuffer(keyBuffer);
+
+    await writeFile(join(this.basePath, AGENTS_DIR, `${agentName}.vault`), encrypted, 'utf8');
+
+    return { vaultKey: keyString };
+  }
+
   async revokeAgent(agentName: string): Promise<void> {
     const vaultPath = join(this.basePath, AGENTS_DIR, `${agentName}.vault`);
     await rm(vaultPath, { force: true });

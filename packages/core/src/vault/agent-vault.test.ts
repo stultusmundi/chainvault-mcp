@@ -118,6 +118,38 @@ describe('AgentVaultManager', () => {
     });
   });
 
+  describe('regenerateAgent', () => {
+    it('regenerates vault with updated config from master', async () => {
+      const manager = new AgentVaultManager(testDir, masterVault);
+      const config = { ...DEPLOYER_CONFIG, chains: [...DEPLOYER_CONFIG.chains] };
+      const result = await manager.createAgent(config, ['my-wallet'], ['etherscan']);
+
+      // Admin changes config in master vault
+      const data = masterVault.getData();
+      data.agents['deployer'] = { ...data.agents['deployer'], chains: [1, 11155111] };
+      await masterVault.saveData();
+
+      // Regenerate
+      const newResult = await manager.regenerateAgent('deployer', result.vaultKey, ['my-wallet'], ['etherscan']);
+
+      // New key works
+      const agentData = await manager.openAgentVault('deployer', newResult.vaultKey);
+      expect(agentData.config.chains).toEqual([1, 11155111]);
+
+      // Old key no longer works
+      await expect(manager.openAgentVault('deployer', result.vaultKey)).rejects.toThrow();
+    });
+
+    it('updates granted keys on regeneration', async () => {
+      const manager = new AgentVaultManager(testDir, masterVault);
+      const result = await manager.createAgent(DEPLOYER_CONFIG, [], []);
+
+      const newResult = await manager.regenerateAgent('deployer', result.vaultKey, ['my-wallet'], []);
+      const agentData = await manager.openAgentVault('deployer', newResult.vaultKey);
+      expect(Object.keys(agentData.keys)).toEqual(['my-wallet']);
+    });
+  });
+
   describe('listAgents', () => {
     it('lists all agents with summaries', async () => {
       const manager = new AgentVaultManager(testDir, masterVault);
