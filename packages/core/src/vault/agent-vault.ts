@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { encrypt, decrypt, generateVaultKeyString } from './crypto.js';
+import { encrypt, decrypt, generateVaultKeyString, wipeBuffer } from './crypto.js';
 import { AgentVaultDataSchema, type AgentVaultData, type AgentConfig } from './types.js';
 import type { MasterVault } from './master-vault.js';
 
@@ -65,6 +65,7 @@ export class AgentVaultManager {
     const agentsDir = join(this.basePath, AGENTS_DIR);
     await mkdir(agentsDir, { recursive: true });
     await writeFile(join(agentsDir, `${config.name}.vault`), encrypted, 'utf8');
+    wipeBuffer(keyBuffer);
 
     return { vaultKey: keyString };
   }
@@ -81,6 +82,7 @@ export class AgentVaultManager {
       'utf8',
     );
     const decrypted = decrypt(encrypted, keyBuffer);
+    wipeBuffer(keyBuffer);
     return AgentVaultDataSchema.parse(JSON.parse(decrypted));
   }
 
@@ -100,6 +102,7 @@ export class AgentVaultManager {
       encrypted,
       'utf8',
     );
+    wipeBuffer(keyBuffer);
 
     return { vaultKey: keyString };
   }
