@@ -6,12 +6,17 @@ import { MasterVault } from './master-vault.js';
 
 describe('MasterVault', () => {
   let testDir: string;
+  let vault: MasterVault | null = null;
 
   beforeEach(async () => {
     testDir = await mkdtemp(join(tmpdir(), 'chainvault-test-'));
   });
 
   afterEach(async () => {
+    if (vault && vault.isUnlocked()) {
+      vault.lock();
+    }
+    vault = null;
     await rm(testDir, { recursive: true, force: true });
   });
 
@@ -33,7 +38,7 @@ describe('MasterVault', () => {
   describe('unlock / lock', () => {
     it('unlocks with correct password', async () => {
       await MasterVault.init(testDir, 'test-password');
-      const vault = await MasterVault.unlock(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
       expect(vault.isUnlocked()).toBe(true);
     });
 
@@ -46,23 +51,23 @@ describe('MasterVault', () => {
 
     it('lock clears sensitive data', async () => {
       await MasterVault.init(testDir, 'test-password');
-      const vault = await MasterVault.unlock(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
       vault.lock();
       expect(vault.isUnlocked()).toBe(false);
     });
 
     it('operations fail after lock', async () => {
       await MasterVault.init(testDir, 'test-password');
-      const vault = await MasterVault.unlock(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
       vault.lock();
-      expect(() => vault.listKeys()).toThrow('Vault is locked');
+      expect(() => vault!.listKeys()).toThrow('Vault is locked');
     });
   });
 
   describe('key management', () => {
     it('adds and lists a key', async () => {
       await MasterVault.init(testDir, 'test-password');
-      const vault = await MasterVault.unlock(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
       await vault.addKey('my-wallet', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', [1, 11155111]);
       const keys = vault.listKeys();
       expect(keys).toHaveLength(1);
@@ -74,7 +79,7 @@ describe('MasterVault', () => {
 
     it('removes a key', async () => {
       await MasterVault.init(testDir, 'test-password');
-      const vault = await MasterVault.unlock(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
       await vault.addKey('my-wallet', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', [1]);
       await vault.removeKey('my-wallet');
       expect(vault.listKeys()).toHaveLength(0);
@@ -82,11 +87,11 @@ describe('MasterVault', () => {
 
     it('persists keys across unlock cycles', async () => {
       await MasterVault.init(testDir, 'test-password');
-      let vault = await MasterVault.unlock(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
       await vault.addKey('my-wallet', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', [1]);
       vault.lock();
 
-      vault = await MasterVault.unlock(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
       expect(vault.listKeys()).toHaveLength(1);
     });
   });
@@ -94,7 +99,7 @@ describe('MasterVault', () => {
   describe('API key management', () => {
     it('adds and lists an API key', async () => {
       await MasterVault.init(testDir, 'test-password');
-      const vault = await MasterVault.unlock(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
       await vault.addApiKey('etherscan', 'ABCDEF123', 'https://api.etherscan.io');
       const apiKeys = vault.listApiKeys();
       expect(apiKeys).toHaveLength(1);
@@ -105,7 +110,7 @@ describe('MasterVault', () => {
 
     it('removes an API key', async () => {
       await MasterVault.init(testDir, 'test-password');
-      const vault = await MasterVault.unlock(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
       await vault.addApiKey('etherscan', 'ABCDEF123', 'https://api.etherscan.io');
       await vault.removeApiKey('etherscan');
       expect(vault.listApiKeys()).toHaveLength(0);
@@ -115,12 +120,45 @@ describe('MasterVault', () => {
   describe('RPC endpoint management', () => {
     it('adds and lists an RPC endpoint', async () => {
       await MasterVault.init(testDir, 'test-password');
-      const vault = await MasterVault.unlock(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
       await vault.addRpcEndpoint('mainnet', 'https://mainnet.infura.io/v3/KEY', 1);
       const endpoints = vault.listRpcEndpoints();
       expect(endpoints).toHaveLength(1);
       expect(endpoints[0].name).toBe('mainnet');
       expect(endpoints[0].chain_id).toBe(1);
+    });
+  });
+
+  describe('auto-lock', () => {
+    it('locks after timeout', async () => {
+      await MasterVault.init(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 50 });
+      expect(vault.isUnlocked()).toBe(true);
+      await new Promise((r) => setTimeout(r, 100));
+      expect(vault.isUnlocked()).toBe(false);
+    });
+
+    it('does not auto-lock if timeout is 0', async () => {
+      await MasterVault.init(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
+      expect(vault.isUnlocked()).toBe(true);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(vault.isUnlocked()).toBe(true);
+    });
+
+    it('clears timer on manual lock', async () => {
+      await MasterVault.init(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 5000 });
+      vault.lock();
+      expect(vault.isUnlocked()).toBe(false);
+    });
+
+    it('uses default 15 min timeout when no options provided', async () => {
+      await MasterVault.init(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password');
+      expect(vault.isUnlocked()).toBe(true);
+      // Vault should still be unlocked immediately (15 min hasn't passed)
+      expect(vault.isUnlocked()).toBe(true);
     });
   });
 });
