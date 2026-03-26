@@ -51,4 +51,26 @@ describe('EvmAdapter - Write Operations', () => {
     });
     expect(result.hash).toBe('0xWriteTxHash');
   });
+
+  it('wipes private key from params after deploy', async () => {
+    const params = {
+      abi: [{ inputs: [], stateMutability: 'nonpayable', type: 'constructor' }],
+      bytecode: '0x608060405260405161083e',
+      privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+    };
+    await adapter.deployContract(params);
+    expect(params.privateKey).toBe('');
+  });
+
+  it('wipes private key from params after writeContract', async () => {
+    const params = {
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      abi: [{ inputs: [], name: 'mint', outputs: [], stateMutability: 'nonpayable', type: 'function' }],
+      functionName: 'mint',
+      args: [],
+      privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+    };
+    await adapter.writeContract(params);
+    expect(params.privateKey).toBe('');
+  });
 });

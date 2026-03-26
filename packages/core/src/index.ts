@@ -7,6 +7,7 @@ export {
   deriveKeyFromPassword,
   generateRandomKey,
   generateVaultKeyString,
+  wipeBuffer,
 } from './vault/crypto.js';
 export type {
   MasterVaultData,

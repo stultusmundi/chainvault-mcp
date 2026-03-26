@@ -11,6 +11,7 @@ export class MasterVault {
   private data: MasterVaultData | null = null;
   private masterKey: Buffer | null = null;
   private basePath: string;
+  private autoLockTimer: ReturnType<typeof setTimeout> | null = null;
 
   private constructor(basePath: string) {
     this.basePath = basePath;
@@ -43,7 +44,11 @@ export class MasterVault {
     await writeFile(vaultPath, encrypted, 'utf8');
   }
 
-  static async unlock(basePath: string, password: string): Promise<MasterVault> {
+  static async unlock(
+    basePath: string,
+    password: string,
+    options?: { autoLockMs?: number },
+  ): Promise<MasterVault> {
     const salt = await readFile(join(basePath, SALT_FILENAME));
     const masterKey = await deriveKeyFromPassword(password, salt);
 
@@ -54,6 +59,13 @@ export class MasterVault {
     const vault = new MasterVault(basePath);
     vault.data = data;
     vault.masterKey = masterKey;
+
+    const autoLockMs = options?.autoLockMs ?? 15 * 60 * 1000;
+    if (autoLockMs > 0) {
+      vault.autoLockTimer = setTimeout(() => vault.lock(), autoLockMs);
+      vault.autoLockTimer.unref();
+    }
+
     return vault;
   }
 
@@ -62,6 +74,10 @@ export class MasterVault {
   }
 
   lock(): void {
+    if (this.autoLockTimer) {
+      clearTimeout(this.autoLockTimer);
+      this.autoLockTimer = null;
+    }
     this.data = null;
     if (this.masterKey) {
       this.masterKey.fill(0);

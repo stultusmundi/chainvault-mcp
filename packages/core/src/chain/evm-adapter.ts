@@ -172,49 +172,57 @@ export class EvmAdapter implements ChainAdapter {
   }
 
   async deployContract(params: DeployParams): Promise<{ hash: string; address?: string }> {
-    const account = privateKeyToAccount(params.privateKey as `0x${string}`);
-    const chain = this.getChain();
-    const walletClient = createWalletClient({
-      account,
-      chain,
-      transport: http(this.rpcUrl),
-    });
+    try {
+      const account = privateKeyToAccount(params.privateKey as `0x${string}`);
+      const chain = this.getChain();
+      const walletClient = createWalletClient({
+        account,
+        chain,
+        transport: http(this.rpcUrl),
+      });
 
-    const hash = await walletClient.deployContract({
-      abi: params.abi,
-      bytecode: params.bytecode as `0x${string}`,
-      args: params.args || [],
-      account,
-      chain,
-    });
+      const hash = await walletClient.deployContract({
+        abi: params.abi,
+        bytecode: params.bytecode as `0x${string}`,
+        args: params.args || [],
+        account,
+        chain,
+      });
 
-    const receipt = await this.client.waitForTransactionReceipt({ hash });
+      const receipt = await this.client.waitForTransactionReceipt({ hash });
 
-    return {
-      hash,
-      address: receipt.contractAddress ?? undefined,
-    };
+      return {
+        hash,
+        address: receipt.contractAddress ?? undefined,
+      };
+    } finally {
+      params.privateKey = '';
+    }
   }
 
   async writeContract(params: WriteContractParams): Promise<{ hash: string }> {
-    const account = privateKeyToAccount(params.privateKey as `0x${string}`);
-    const chain = this.getChain();
-    const walletClient = createWalletClient({
-      account,
-      chain,
-      transport: http(this.rpcUrl),
-    });
+    try {
+      const account = privateKeyToAccount(params.privateKey as `0x${string}`);
+      const chain = this.getChain();
+      const walletClient = createWalletClient({
+        account,
+        chain,
+        transport: http(this.rpcUrl),
+      });
 
-    const hash = await walletClient.writeContract({
-      address: params.address as `0x${string}`,
-      abi: params.abi,
-      functionName: params.functionName,
-      args: params.args,
-      account,
-      chain,
-      value: params.value ? BigInt(params.value) : undefined,
-    });
+      const hash = await walletClient.writeContract({
+        address: params.address as `0x${string}`,
+        abi: params.abi,
+        functionName: params.functionName,
+        args: params.args,
+        account,
+        chain,
+        value: params.value ? BigInt(params.value) : undefined,
+      });
 
-    return { hash };
+      return { hash };
+    } finally {
+      params.privateKey = '';
+    }
   }
 }
