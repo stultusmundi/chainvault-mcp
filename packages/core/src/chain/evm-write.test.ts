@@ -74,3 +74,49 @@ describe('EvmAdapter - Write Operations', () => {
     expect(params.privateKey).toBe('');
   });
 });
+
+describe('EvmAdapter - Write with decimal ETH value (parseEther)', () => {
+  let adapter: EvmAdapter;
+
+  beforeEach(() => {
+    adapter = new EvmAdapter('https://rpc.example.com', 11155111);
+  });
+
+  it('writes to a contract with decimal ETH value', async () => {
+    const result = await adapter.writeContract({
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      abi: [{ inputs: [], name: 'mint', outputs: [], stateMutability: 'payable', type: 'function' }],
+      functionName: 'mint',
+      args: [],
+      privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      value: '0.5',
+    });
+    expect(result.hash).toBe('0xWriteTxHash');
+
+    // Verify parseEther conversion: 0.5 ETH = 500000000000000000 wei
+    const { parseEther, createWalletClient } = await import('viem');
+    const mockWalletClient = (createWalletClient as any).mock.results.at(-1).value;
+    expect(mockWalletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ value: parseEther('0.5') }),
+    );
+  });
+
+  it('writes to a contract with integer ETH value', async () => {
+    const result = await adapter.writeContract({
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      abi: [{ inputs: [], name: 'mint', outputs: [], stateMutability: 'payable', type: 'function' }],
+      functionName: 'mint',
+      args: [],
+      privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      value: '1',
+    });
+    expect(result.hash).toBe('0xWriteTxHash');
+
+    // Verify parseEther conversion: 1 ETH = 1000000000000000000 wei
+    const { parseEther, createWalletClient } = await import('viem');
+    const mockWalletClient = (createWalletClient as any).mock.results.at(-1).value;
+    expect(mockWalletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ value: parseEther('1') }),
+    );
+  });
+});
