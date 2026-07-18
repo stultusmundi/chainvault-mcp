@@ -7,3 +7,4 @@ dist/
 coverage/
 .chainvault-dev/
 .DS_Store
+tests/workstyle/.artifacts/
