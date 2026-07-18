@@ -40,6 +40,15 @@ export default defineConfig({
           hookTimeout: 120_000,
         },
       },
+      {
+        extends: true,
+        test: {
+          name: 'fork',
+          include: ['tests/workstyle/fork/**/*.test.ts'],
+          testTimeout: 120_000,
+          hookTimeout: 300_000,
+        },
+      },
     ],
   },
 });

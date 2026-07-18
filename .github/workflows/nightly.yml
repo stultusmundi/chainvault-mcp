@@ -29,3 +29,35 @@ jobs:
             --title "Nightly live-RPC run failed ($(date -u +%F))" \
             --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --label nightly-failure || true
+  fork:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Install solc 0.8.24 (static binary)
+        run: |
+          curl -sSL -o /usr/local/bin/solc \
+            https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.24+commit.e11b9ed9
+          chmod +x /usr/local/bin/solc
+      - run: npm ci
+      - run: npx vitest run --project fork
+        env:
+          WORKSTYLE_FORK: '1'
+          # publicnode's free tier 403s on any pinned (non-"latest") historical
+          # state fetch, so default to drpc.org, which serves the pinned block.
+          WORKSTYLE_FORK_URL: ${{ secrets.FORK_RPC_URL || 'https://eth.drpc.org' }}
+      - name: Open issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Nightly fork run failed ($(date -u +%F))" \
+            --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --label nightly-failure || true

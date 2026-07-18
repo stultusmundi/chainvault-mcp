@@ -36,6 +36,7 @@ describe.skipIf(!solcReady)('corpus pipeline', () => {
     ['Counter', 'CounterV1'],
     ['Counter', 'CounterV2'],
     ['GasHog', 'GasHog'],
+    ['FeeToken', 'FeeToken'],
   ];
 
   it.each(CORPUS)('compiles %s:%s', async (file, contract) => {

@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:workstyle": "vitest run --project anvil",
+    "test:fork": "WORKSTYLE_FORK=1 vitest run --project fork",
     "lint": "tsc --noEmit",
     "chainvault": "node packages/cli/dist/index.js",
     "serve": "node packages/cli/dist/index.js serve"
