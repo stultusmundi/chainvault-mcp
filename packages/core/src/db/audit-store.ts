@@ -56,6 +56,6 @@ export class AuditStore {
       params.push(limit);
     }
 
-    return this.db.getDB().prepare(sql).all(...params) as AuditEntry[];
+    return this.db.getDB().prepare(sql).all(...params) as unknown as AuditEntry[];
   }
 }

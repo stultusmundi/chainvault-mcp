@@ -16,7 +16,7 @@ export class SpendStore {
   getSpentSince(agentName: string, chainId: number, since: number): number {
     const result = this.db.getDB().prepare(
       'SELECT COALESCE(SUM(amount), 0) as total FROM spend_records WHERE agent_name = ? AND chain_id = ? AND timestamp > ?'
-    ).get(agentName, chainId, since) as { total: number };
+    ).get(agentName, chainId, since) as unknown as { total: number };
     return result.total;
   }
 }

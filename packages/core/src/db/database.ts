@@ -1,4 +1,4 @@
-import Database, { type Database as DatabaseType } from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 
@@ -28,12 +28,12 @@ const MIGRATIONS = [
 ];
 
 export class ChainVaultDB {
-  private db: DatabaseType;
+  private db: DatabaseSync;
 
   constructor(basePath: string) {
     mkdirSync(basePath, { recursive: true });
-    this.db = new Database(join(basePath, DB_FILENAME));
-    this.db.pragma('journal_mode = WAL');
+    this.db = new DatabaseSync(join(basePath, DB_FILENAME));
+    this.db.exec('PRAGMA journal_mode = WAL');
     this.runMigrations();
   }
 
@@ -43,7 +43,7 @@ export class ChainVaultDB {
     }
   }
 
-  getDB(): DatabaseType {
+  getDB(): DatabaseSync {
     return this.db;
   }
 
