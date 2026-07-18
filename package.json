@@ -11,6 +11,7 @@
     "build": "bash scripts/build.sh",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:workstyle": "vitest run --project anvil",
     "lint": "tsc --noEmit",
     "chainvault": "node packages/cli/dist/index.js",
     "serve": "node packages/cli/dist/index.js serve"

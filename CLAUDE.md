@@ -9,6 +9,8 @@ Secure MCP server gateway between AI agents and EVM blockchains with vault-based
 - Test watch: `npx vitest`
 - Type check: `npx tsc --noEmit`
 - Single test: `npx vitest run path/to/file.test.ts`
+- Workstyle tests (needs anvil + solc): `npm run test:workstyle`
+- Unit-only (CI PR gate): `npx vitest run --project unit`
 
 ## Architecture
 

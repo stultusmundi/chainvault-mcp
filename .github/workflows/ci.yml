@@ -21,3 +21,22 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run build
       - run: npx vitest run --project unit
+  workstyle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Install solc 0.8.24 (static binary)
+        run: |
+          curl -sSL -o /usr/local/bin/solc \
+            https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.24+commit.e11b9ed9
+          chmod +x /usr/local/bin/solc
+          solc --version
+      - run: npm ci
+      - run: npx vitest run --project anvil
