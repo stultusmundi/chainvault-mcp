@@ -19,6 +19,8 @@ export interface VaultFixtureOptions {
   chainId?: number;
   /** Extra API keys to add to the master vault: name -> { key, baseUrl } */
   apiKeys?: Record<string, { key: string; baseUrl: string }>;
+  /** Override the default anvil key import: name -> { privateKey, chains } */
+  keys?: Record<string, { privateKey: string; chains: number[] }>;
   agents?: FixtureAgentSpec[];
 }
 
@@ -38,7 +40,12 @@ export async function createVaultFixture(opts: VaultFixtureOptions): Promise<Vau
   await MasterVault.init(basePath, FIXTURE_PASSWORD);
   const vault = await MasterVault.unlock(basePath, FIXTURE_PASSWORD);
   try {
-    await vault.addKey('anvil-0', ANVIL_ACCOUNTS[0].privateKey, [chainId]);
+    const keyEntries = Object.entries(
+      opts.keys ?? { 'anvil-0': { privateKey: ANVIL_ACCOUNTS[0].privateKey, chains: [chainId] } },
+    );
+    for (const [name, key] of keyEntries) {
+      await vault.addKey(name, key.privateKey, key.chains);
+    }
     await vault.addRpcEndpoint('workstyle-rpc', opts.rpcUrl, chainId);
     for (const [name, api] of Object.entries(opts.apiKeys ?? {})) {
       await vault.addApiKey(name, api.key, api.baseUrl);
@@ -66,7 +73,7 @@ export async function createVaultFixture(opts: VaultFixtureOptions): Promise<Vau
       };
       const { vaultKey } = await manager.createAgent(
         config,
-        spec.grantKeys ?? ['anvil-0'],
+        spec.grantKeys ?? keyEntries.map(([name]) => name),
         spec.grantApis ?? [],
       );
       vaultKeys[spec.name] = vaultKey;

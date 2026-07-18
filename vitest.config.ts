@@ -49,6 +49,15 @@ export default defineConfig({
           hookTimeout: 300_000,
         },
       },
+      {
+        extends: true,
+        test: {
+          name: 'testnet',
+          include: ['tests/workstyle/testnet/**/*.test.ts'],
+          testTimeout: 300_000,
+          hookTimeout: 300_000,
+        },
+      },
     ],
   },
 });
