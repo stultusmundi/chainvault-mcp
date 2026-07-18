@@ -7,7 +7,7 @@ import { connectMcp, callToolJson, callToolText, type WorkstyleMcp } from '../he
 import { AnvilHarness } from '../helpers/anvil.js';
 
 const SEPOLIA = 11155111;
-const SEPOLIA_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
+const SEPOLIA_RPC = process.env.TESTNET_RPC_URL ?? 'https://ethereum-sepolia-rpc.publicnode.com';
 const MIN_BALANCE_ETH = 0.02;
 
 const key = process.env.TESTNET_PRIVATE_KEY;
@@ -15,10 +15,14 @@ let funded = false;
 if (key) {
   const account = privateKeyToAccount(key as `0x${string}`);
   const client = createPublicClient({ transport: http(SEPOLIA_RPC) });
-  const balance = await client.getBalance({ address: account.address });
-  funded = Number(formatEther(balance)) >= MIN_BALANCE_ETH;
-  if (!funded) {
-    console.warn(`SKIP testnet: ${account.address} holds < ${MIN_BALANCE_ETH} ETH — see docs/testnet-runbook.md`);
+  try {
+    const balance = await client.getBalance({ address: account.address });
+    funded = Number(formatEther(balance)) >= MIN_BALANCE_ETH;
+    if (!funded) {
+      console.warn(`SKIP testnet: ${account.address} holds < ${MIN_BALANCE_ETH} ETH — see docs/testnet-runbook.md`);
+    }
+  } catch (err) {
+    console.warn(`SKIP testnet: Sepolia RPC unreachable (${String(err)}) — transient? see docs/testnet-runbook.md`);
   }
 }
 const ready = Boolean(key) && funded && (await compilerAvailable());
