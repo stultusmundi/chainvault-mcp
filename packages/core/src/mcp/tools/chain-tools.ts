@@ -17,6 +17,16 @@ function sanitizeError(err: unknown): string {
   return msg.replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]');
 }
 
+/**
+ * JSON.stringify cannot serialize bigint, but viem returns raw bigint values
+ * for uint/int ABI types (contract reads, simulation results, event args).
+ * Stringify with a replacer that renders bigints as decimal strings so
+ * tool responses never crash on a plain uint256 read.
+ */
+export function toJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
+}
+
 function checkChainAccess(ctx: AgentContext | null, chainId: number): string | null {
   if (!ctx) return 'No agent context. Set CHAINVAULT_VAULT_KEY.';
   const result = ctx.rules.checkTxRequest({ type: 'read', chain_id: chainId, value: '0' });
@@ -280,7 +290,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           args: args ?? [],
         });
         audit({ action: 'get_contract_state', chain_id, status: 'approved', details: `Read ${function_name}` });
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ result }, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: toJson({ result }) }] };
       } catch (e: unknown) {
         audit({ action: 'get_contract_state', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
@@ -328,7 +338,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           value,
         });
         audit({ action: 'simulate_transaction', chain_id, status: 'approved', details: `Simulated ${function_name}` });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: toJson(result) }] };
       } catch (e: unknown) {
         audit({ action: 'simulate_transaction', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
@@ -369,7 +379,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           toBlock: to_block !== undefined ? BigInt(to_block) : undefined,
         });
         audit({ action: 'get_events', chain_id, status: 'approved', details: `Queried ${event_name} events` });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(events, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: toJson(events) }] };
       } catch (e: unknown) {
         audit({ action: 'get_events', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
