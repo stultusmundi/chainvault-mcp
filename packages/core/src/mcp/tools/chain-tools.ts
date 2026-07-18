@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseEther } from 'viem';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { EvmAdapter } from '../../chain/evm-adapter.js';
 import { getChainConfig } from '../../chain/chains.js';
@@ -145,7 +146,9 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           functionName: function_name,
           args: args ?? [],
           privateKey,
-          value,
+          // Tool input, rules engine, and spend tracking are all ETH-denominated;
+          // only the adapter (and the underlying viem call) needs wei.
+          value: value ? parseEther(value).toString() : undefined,
         });
         // Record spend for limit tracking
         const spendValue = parseFloat(value ?? '0');
