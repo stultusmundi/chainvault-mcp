@@ -8,6 +8,6 @@
 export type AuditFn = (entry: {
   action: string;
   chain_id?: number;
-  status: 'approved' | 'denied';
+  status: 'approved' | 'denied' | 'error';
   details: string;
 }) => void;

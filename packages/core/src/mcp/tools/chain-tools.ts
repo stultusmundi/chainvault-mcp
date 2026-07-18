@@ -92,7 +92,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           }, null, 2) }],
         };
       } catch (e: unknown) {
-        audit({ action: 'deploy_contract', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'deploy_contract', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -145,7 +145,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           content: [{ type: 'text' as const, text: JSON.stringify({ hash: result.hash }, null, 2) }],
         };
       } catch (e: unknown) {
-        audit({ action: 'interact_contract', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'interact_contract', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -209,7 +209,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         audit({ action: 'verify_contract', chain_id, status: 'approved', details: `Verified ${contract_name}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
       } catch (e: unknown) {
-        audit({ action: 'verify_contract', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'verify_contract', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -243,7 +243,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         audit({ action: 'get_balance', chain_id, status: 'approved', details: 'Retrieved balance' });
         return { content: [{ type: 'text' as const, text: JSON.stringify(balance, null, 2) }] };
       } catch (e: unknown) {
-        audit({ action: 'get_balance', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'get_balance', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -282,7 +282,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         audit({ action: 'get_contract_state', chain_id, status: 'approved', details: `Read ${function_name}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify({ result }, null, 2) }] };
       } catch (e: unknown) {
-        audit({ action: 'get_contract_state', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'get_contract_state', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -330,7 +330,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         audit({ action: 'simulate_transaction', chain_id, status: 'approved', details: `Simulated ${function_name}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e: unknown) {
-        audit({ action: 'simulate_transaction', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'simulate_transaction', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -371,7 +371,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         audit({ action: 'get_events', chain_id, status: 'approved', details: `Queried ${event_name} events` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(events, null, 2) }] };
       } catch (e: unknown) {
-        audit({ action: 'get_events', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'get_events', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -401,7 +401,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         audit({ action: 'get_transaction', chain_id, status: 'approved', details: `Retrieved tx ${hash.slice(0, 10)}...` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(tx, null, 2) }] };
       } catch (e: unknown) {
-        audit({ action: 'get_transaction', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'get_transaction', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },

@@ -76,7 +76,7 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
         audit({ action: 'query_explorer', chain_id, status: 'approved', details: `Queried ${mod}.${action}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e: unknown) {
-        audit({ action: 'query_explorer', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'query_explorer', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -105,7 +105,7 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
         audit({ action: 'query_price', status: 'approved', details: `Price for ${token_id}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
       } catch (e: unknown) {
-        audit({ action: 'query_price', status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'query_price', status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify({ error: sanitizeError(e) }) }] };
       }
     },

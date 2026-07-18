@@ -5,7 +5,7 @@ export interface AuditEntry {
   agent: string;
   action: string;
   chain_id: number;
-  status: 'approved' | 'denied';
+  status: 'approved' | 'denied' | 'error';
   details: string;
 }
 
@@ -13,7 +13,7 @@ type LogInput = Omit<AuditEntry, 'timestamp'>;
 
 interface FilterOptions {
   agent?: string;
-  status?: 'approved' | 'denied';
+  status?: 'approved' | 'denied' | 'error';
 }
 
 export class AuditStore {

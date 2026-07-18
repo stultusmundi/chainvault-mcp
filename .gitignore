@@ -5,4 +5,4 @@ dist/
 .env.*
 !.env.example
 coverage/
-.chainvault-dev/
+.chainvault-dev/.DS_Store
