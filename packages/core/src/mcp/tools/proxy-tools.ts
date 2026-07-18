@@ -98,7 +98,7 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
         const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(token_id)}&vs_currencies=${encodeURIComponent(cur)}`;
         const response = await fetch(url);
         if (!response.ok) {
-          audit({ action: 'query_price', status: 'approved', details: `CoinGecko error: ${response.status}` });
+          audit({ action: 'query_price', status: 'error', details: `CoinGecko error: ${response.status}` });
           return { content: [{ type: 'text' as const, text: JSON.stringify({ error: `CoinGecko API error: ${response.status}` }) }] };
         }
         const data = await response.json();
