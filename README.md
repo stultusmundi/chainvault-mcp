@@ -5,7 +5,8 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Node: >=20](https://img.shields.io/badge/Node-%3E%3D20-green.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)
-![Tests: 472 passing](https://img.shields.io/badge/Tests-472%20passing-brightgreen.svg)
+[![CI](https://github.com/stultusmundi/chainvault-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/stultusmundi/chainvault-mcp/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/chainvault-mcp.svg)](https://www.npmjs.com/package/chainvault-mcp)
 
 ChainVault MCP is a secure [Model Context Protocol](https://modelcontextprotocol.io/) server that acts as a gateway between AI agents and EVM blockchains. It provides vault-based key management, rule-enforced access control, and API proxying -- so your agent can deploy contracts, read chain state, and query block explorers without direct access to any secret.
 
