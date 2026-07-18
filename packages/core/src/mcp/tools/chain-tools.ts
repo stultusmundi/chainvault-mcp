@@ -338,7 +338,9 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           functionName: function_name,
           args: args ?? [],
           account: agentKey.address,
-          value,
+          // Tool input is ETH-denominated (like interact_contract); only the
+          // adapter (and the underlying viem call) needs wei.
+          value: value ? parseEther(value).toString() : undefined,
         });
         audit({ action: 'simulate_transaction', chain_id, status: 'approved', details: `Simulated ${function_name}` });
         return { content: [{ type: 'text' as const, text: toJson(result) }] };

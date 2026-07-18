@@ -37,6 +37,15 @@ describe.skipIf(!ready)('MCP edge cases on anvil', () => {
     expect(JSON.stringify(deposit)).toContain('500000000000000000'); // 0.5 ETH in wei
   });
 
+  it('simulate_transaction forwards value so payable deposit simulates as success', async () => {
+    const vault = await deployMcp('PayableVault', 'PayableVault');
+    const sim = await callToolJson(mcp.client, 'simulate_transaction', {
+      chain_id: ANVIL_CHAIN_ID, address: vault.address, abi: vault.abi,
+      function_name: 'deposit', args: [], value: '0.5',
+    });
+    expect(sim.success).toBe(true);
+  });
+
   it('revert reasons surface sanitized — no key material, no internals', async () => {
     const reverter = await deployMcp('Reverter', 'Reverter');
     const text = await callToolText(mcp.client, 'interact_contract', {

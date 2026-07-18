@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createPublicClient } from 'viem';
 import { EvmAdapter } from './evm-adapter.js';
 import type { ChainAdapter } from './types.js';
 
@@ -67,6 +68,37 @@ describe('EvmAdapter - Read Operations', () => {
       account: '0x1234567890abcdef1234567890abcdef12345678',
     });
     expect(result.success).toBe(true);
+  });
+
+  it('forwards value in wei to simulateContract for payable calls', async () => {
+    await adapter.simulateTransaction({
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      abi: [{ inputs: [], name: 'deposit', outputs: [], stateMutability: 'payable', type: 'function' }],
+      functionName: 'deposit',
+      args: [],
+      account: '0x1234567890abcdef1234567890abcdef12345678',
+      value: '500000000000000000', // 0.5 ETH in wei
+    });
+
+    const client = vi.mocked(createPublicClient).mock.results.at(-1)!.value;
+    expect(client.simulateContract).toHaveBeenCalledWith(
+      expect.objectContaining({ value: 500000000000000000n }),
+    );
+  });
+
+  it('passes undefined value to simulateContract when no value given', async () => {
+    await adapter.simulateTransaction({
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      abi: [{ inputs: [], name: 'mint', outputs: [], stateMutability: 'nonpayable', type: 'function' }],
+      functionName: 'mint',
+      args: [],
+      account: '0x1234567890abcdef1234567890abcdef12345678',
+    });
+
+    const client = vi.mocked(createPublicClient).mock.results.at(-1)!.value;
+    expect(client.simulateContract).toHaveBeenCalledWith(
+      expect.objectContaining({ value: undefined }),
+    );
   });
 
   it('gets contract events', async () => {

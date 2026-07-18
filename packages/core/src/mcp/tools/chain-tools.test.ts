@@ -3,11 +3,13 @@ import { registerChainTools } from './chain-tools.js';
 import type { AgentContext } from '../context.js';
 
 const writeContractMock = vi.fn(async () => ({ hash: '0xWriteTxHash' }));
+const simulateTransactionMock = vi.fn(async () => ({ success: true, result: null }));
 
 vi.mock('../../chain/evm-adapter.js', () => ({
   EvmAdapter: {
     fromChainId: vi.fn(() => ({
       writeContract: writeContractMock,
+      simulateTransaction: simulateTransactionMock,
     })),
   },
 }));
@@ -80,6 +82,51 @@ describe('interact_contract value conversion', () => {
 
     expect(writeContractMock).toHaveBeenCalledTimes(1);
     const callArgs = writeContractMock.mock.calls[0][0];
+    expect(callArgs.value).toBeUndefined();
+  });
+});
+
+describe('simulate_transaction value conversion', () => {
+  beforeEach(() => {
+    simulateTransactionMock.mockClear();
+  });
+
+  it('converts ETH-denominated value to wei before calling the adapter', async () => {
+    const server = createFakeServer();
+    const ctx = createApprovedContext();
+    registerChainTools(server as any, () => ctx);
+
+    const handler = server.handlers.get('simulate_transaction')!;
+    await handler({
+      chain_id: 11155111,
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      abi: '[]',
+      function_name: 'deposit',
+      args: [],
+      value: '0.5',
+    });
+
+    expect(simulateTransactionMock).toHaveBeenCalledTimes(1);
+    const callArgs = simulateTransactionMock.mock.calls[0][0];
+    expect(callArgs.value).toBe('500000000000000000');
+  });
+
+  it('passes undefined value through when no value is given', async () => {
+    const server = createFakeServer();
+    const ctx = createApprovedContext();
+    registerChainTools(server as any, () => ctx);
+
+    const handler = server.handlers.get('simulate_transaction')!;
+    await handler({
+      chain_id: 11155111,
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      abi: '[]',
+      function_name: 'increment',
+      args: [],
+    });
+
+    expect(simulateTransactionMock).toHaveBeenCalledTimes(1);
+    const callArgs = simulateTransactionMock.mock.calls[0][0];
     expect(callArgs.value).toBeUndefined();
   });
 });

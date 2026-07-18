@@ -121,6 +121,7 @@ export class EvmAdapter implements ChainAdapter {
         functionName: params.functionName,
         args: params.args,
         account: params.account as `0x${string}`,
+        value: params.value ? BigInt(params.value) : undefined,
       });
       return { success: true, result: result.result };
     } catch (err: any) {
