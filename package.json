@@ -1,6 +1,6 @@
 {
-  "name": "chainvault-mcp",
-  "version": "0.1.0",
+  "name": "chainvault-mcp-monorepo",
+  "version": "1.0.0",
   "private": true,
   "description": "Secure MCP server gateway between AI agents and blockchains",
   "workspaces": [

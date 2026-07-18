@@ -62,4 +62,4 @@ export { ChainVaultServer } from './mcp/server.js';
 export { createAgentContext } from './mcp/context.js';
 export type { AgentContext, AgentKeyInfo } from './mcp/context.js';
 
-export const VERSION = '0.1.0';
+export const VERSION = '1.0.0';
