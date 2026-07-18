@@ -47,15 +47,19 @@ export async function connectMcp(
   await server.getMcpServer().connect(serverTransport);
   await client.connect(clientTransport);
 
-  return {
-    anvil, fixture, client, server,
+  const handle: WorkstyleMcp = {
+    anvil,
+    fixture,
+    client,
+    server,
     close: async () => {
-      await client.close();
-      await server.getMcpServer().close();
+      await handle.client.close();
+      await handle.server.getMcpServer().close();
       await fixture.cleanup();
       await anvil.stop();
     },
   };
+  return handle;
 }
 
 export async function callToolJson(client: Client, name: string, args: Record<string, unknown>): Promise<any> {
