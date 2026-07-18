@@ -23,4 +23,24 @@ describe.skipIf(!solcReady)('corpus pipeline', () => {
     const again = await compileCorpusContract('TestToken');
     expect(again.bytecode.length).toBeGreaterThan(2);
   });
+
+  const CORPUS: Array<[file: string, contract: string]> = [
+    ['TestToken', 'TestToken'],
+    ['TestNFT', 'TestNFT'],
+    ['PayableVault', 'PayableVault'],
+    ['Reverter', 'Reverter'],
+    ['EventStorm', 'EventStorm'],
+    ['Factory', 'Factory'],
+    ['Factory', 'Child'],
+    ['Counter', 'CounterProxy'],
+    ['Counter', 'CounterV1'],
+    ['Counter', 'CounterV2'],
+    ['GasHog', 'GasHog'],
+  ];
+
+  it.each(CORPUS)('compiles %s:%s', async (file, contract) => {
+    const result = await compileCorpusContract(file, contract);
+    expect(result.abi.length).toBeGreaterThan(0);
+    expect(result.bytecode).toMatch(/^0x[0-9a-fA-F]+$/);
+  });
 });
