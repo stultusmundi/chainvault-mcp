@@ -85,7 +85,9 @@ describe.skipIf(!ready)('secret non-exposure and zero-decryption', () => {
   });
 
   it('audit log contains no secret material after all of the above', async () => {
-    assertNoSecrets(await auditRows(), secrets);
+    const rows = await auditRows();
+    expect(rows.length).toBeGreaterThan(0);
+    assertNoSecrets(rows, secrets);
   });
 
   it('a dead RPC surfaces a sanitized error with no secret material', async () => {
@@ -96,6 +98,8 @@ describe.skipIf(!ready)('secret non-exposure and zero-decryption', () => {
       function_name: 'succeed', args: [],
     });
     assertNoSecrets(text, secrets);
-    assertNoSecrets(await auditRows(), secrets);
+    const rows = await auditRows();
+    expect(rows.length).toBeGreaterThan(0);
+    assertNoSecrets(rows, secrets);
   });
 });

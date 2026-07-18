@@ -1,9 +1,21 @@
 import { expect } from 'vitest';
 
-/** Recursively collect every string in a JSON-ish structure (incl. Error messages). */
+/** Recursively collect every string in a JSON-ish structure (incl. Error messages and Error.cause). */
 export function collectStrings(value: unknown, out: string[] = []): string[] {
   if (typeof value === 'string') out.push(value);
-  else if (value instanceof Error) out.push(value.message, value.stack ?? '');
+  else if (value instanceof Error) {
+    out.push(value.message, value.stack ?? '');
+    if ((value as any).cause) collectStrings((value as any).cause, out);
+  }
+  else if (value instanceof Map) {
+    value.forEach((v, k) => {
+      if (typeof k === 'string') out.push(k);
+      collectStrings(v, out);
+    });
+  }
+  else if (value instanceof Set) {
+    value.forEach((v) => collectStrings(v, out));
+  }
   else if (Array.isArray(value)) value.forEach((v) => collectStrings(v, out));
   else if (value && typeof value === 'object') {
     for (const v of Object.values(value)) collectStrings(v, out);
