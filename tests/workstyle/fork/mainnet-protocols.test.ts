@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { encodeFunctionData } from 'viem';
 import { anvilAvailable, ANVIL_ACCOUNTS } from '../helpers/anvil.js';
 import { compileCorpusContract, compilerAvailable } from '../helpers/corpus.js';
-import { startWorkstyleMcp, callToolJson, callToolText, type WorkstyleMcp } from '../helpers/mcp.js';
+import { startWorkstyleMcp, callToolJson, type WorkstyleMcp } from '../helpers/mcp.js';
 import { FORK_BLOCK, FORK_URL, FORK_ENABLED, MAINNET, WETH_ABI, ERC20_MIN_ABI, QUOTER_V1_ABI } from './fork-targets.js';
 
 const ready = FORK_ENABLED && anvilAvailable() && (await compilerAvailable());
