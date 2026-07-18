@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:workstyle": "vitest run --project anvil",
     "test:fork": "WORKSTYLE_FORK=1 vitest run --project fork",
+    "test:scenarios": "npm run build && tsx tests/agent-e2e/run-scenarios.ts",
     "lint": "tsc --noEmit",
     "chainvault": "node packages/cli/dist/index.js",
     "serve": "node packages/cli/dist/index.js serve"
@@ -21,6 +22,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.80",
     "@types/node": "^22.13.0",
     "dotenv": "^17.3.1",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
