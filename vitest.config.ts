@@ -30,6 +30,16 @@ export default defineConfig({
           include: ['packages/core/src/chain/e2e.test.ts'],
         },
       },
+      {
+        extends: true,
+        test: {
+          name: 'anvil',
+          include: ['tests/workstyle/**/*.test.ts'],
+          exclude: ['tests/workstyle/fork/**', 'tests/workstyle/testnet/**'],
+          testTimeout: 60_000,
+          hookTimeout: 120_000,
+        },
+      },
     ],
   },
 });
