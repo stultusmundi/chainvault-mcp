@@ -5,6 +5,10 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   live-rpc:
     runs-on: ubuntu-latest
