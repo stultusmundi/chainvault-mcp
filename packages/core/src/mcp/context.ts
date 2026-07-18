@@ -4,8 +4,13 @@ import { decrypt } from '../vault/crypto.js';
 import { AgentVaultDataSchema, type AgentConfig } from '../vault/types.js';
 import { RulesEngine } from '../rules/engine.js';
 import { readFile } from 'node:fs/promises';
+import type { SpendStore } from '../db/spend-store.js';
 
 const AGENTS_DIR = 'agents';
+
+export interface AgentContextOptions {
+  spendStore?: SpendStore;
+}
 
 export interface AgentKeyInfo {
   name: string;
@@ -33,6 +38,7 @@ export interface AgentContext {
 export async function createAgentContext(
   basePath: string,
   vaultKey: string | undefined,
+  options?: AgentContextOptions,
 ): Promise<AgentContext | null> {
   if (!vaultKey) {
     return null;
@@ -70,7 +76,10 @@ export async function createAgentContext(
         }),
       );
 
-      const rules = new RulesEngine(vaultData.config);
+      const rules = new RulesEngine(vaultData.config, {
+        spendStore: options?.spendStore,
+        agentName: vaultData.agent_name,
+      });
 
       // Controlled accessors — vaultData stays in closure, never exposed
       const getPrivateKeyForChain = (chainId: number): string | null => {

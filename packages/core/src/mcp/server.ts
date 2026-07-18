@@ -7,6 +7,7 @@ import { registerChainRegistryTools } from './tools/chain-registry-tools.js';
 import { createAgentContext, type AgentContext } from './context.js';
 import { ChainVaultDB } from '../db/database.js';
 import { AuditStore } from '../db/audit-store.js';
+import { SpendStore } from '../db/spend-store.js';
 import type { AuditFn } from './audit-fn.js';
 
 interface ServerConfig {
@@ -38,13 +39,15 @@ export class ChainVaultServer {
   }
 
   async init(): Promise<void> {
+    this.db = new ChainVaultDB(this.config.basePath);
+    this.auditStore = new AuditStore(this.db);
+    const spendStore = new SpendStore(this.db);
+
     this.agentContext = await createAgentContext(
       this.config.basePath,
       this.config.vaultKey || process.env.CHAINVAULT_VAULT_KEY,
+      { spendStore },
     );
-
-    this.db = new ChainVaultDB(this.config.basePath);
-    this.auditStore = new AuditStore(this.db);
   }
 
   private registerAllTools(): void {

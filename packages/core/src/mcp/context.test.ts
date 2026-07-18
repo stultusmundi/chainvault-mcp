@@ -107,4 +107,18 @@ describe('createAgentContext', () => {
     const ctx = await createAgentContext(testDir, undefined);
     expect(ctx).toBeNull();
   });
+
+  it('persists spend through the provided SpendStore', async () => {
+    const { ChainVaultDB } = await import('../db/database.js');
+    const { SpendStore } = await import('../db/spend-store.js');
+    const db = new ChainVaultDB(testDir);
+    const spendStore = new SpendStore(db);
+
+    const ctx = await createAgentContext(testDir, vaultKey, { spendStore });
+    ctx!.rules.recordSpend(11155111, 1.5);
+
+    // A brand-new engine over the same store sees the spend — proves persistence path
+    expect(spendStore.getSpentSince(ctx!.agentName, 11155111, 0)).toBe(1.5);
+    db.close();
+  });
 });
