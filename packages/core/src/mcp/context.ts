@@ -26,6 +26,7 @@ export interface AgentContext {
   getPrivateKeyForChain(chainId: number): string | null;
   getApiKey(serviceName: string): { key: string; baseUrl: string } | null;
   getApiKeyForExplorer(explorerApiUrl: string): { serviceName: string; key: string } | null;
+  getRpcUrlForChain(chainId: number): string | null;
 }
 
 /**
@@ -109,6 +110,13 @@ export async function createAgentContext(
         return null;
       };
 
+      const getRpcUrlForChain = (chainId: number): string | null => {
+        for (const ep of Object.values(vaultData.rpc_endpoints)) {
+          if (ep.chain_id === chainId) return ep.url;
+        }
+        return null;
+      };
+
       return {
         agentName: vaultData.agent_name,
         config: vaultData.config,
@@ -117,6 +125,7 @@ export async function createAgentContext(
         getPrivateKeyForChain,
         getApiKey,
         getApiKeyForExplorer,
+        getRpcUrlForChain,
       };
     } catch {
       // Wrong key for this vault file, try the next one

@@ -74,7 +74,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       }
 
       try {
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx!.getRpcUrlForChain(chain_id) ?? undefined);
         const parsedAbi = JSON.parse(abi);
         const result = await adapter.deployContract({
           abi: parsedAbi,
@@ -127,7 +127,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       }
 
       try {
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx!.getRpcUrlForChain(chain_id) ?? undefined);
         const parsedAbi = JSON.parse(abi);
         const result = await adapter.writeContract({
           address,
@@ -238,7 +238,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       }
 
       try {
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx?.getRpcUrlForChain(chain_id) ?? undefined);
         const balance = await adapter.getBalance(address);
         audit({ action: 'get_balance', chain_id, status: 'approved', details: 'Retrieved balance' });
         return { content: [{ type: 'text' as const, text: JSON.stringify(balance, null, 2) }] };
@@ -272,7 +272,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
 
       try {
         const parsedAbi = JSON.parse(abi);
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx?.getRpcUrlForChain(chain_id) ?? undefined);
         const result = await adapter.readContract({
           address,
           abi: parsedAbi,
@@ -318,7 +318,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         }
 
         const parsedAbi = JSON.parse(abi);
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx!.getRpcUrlForChain(chain_id) ?? undefined);
         const result = await adapter.simulateTransaction({
           address,
           abi: parsedAbi,
@@ -360,7 +360,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
 
       try {
         const parsedAbi = JSON.parse(abi);
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx?.getRpcUrlForChain(chain_id) ?? undefined);
         const events = await adapter.getEvents({
           address,
           abi: parsedAbi,
@@ -396,7 +396,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       }
 
       try {
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx?.getRpcUrlForChain(chain_id) ?? undefined);
         const tx = await adapter.getTransaction(hash);
         audit({ action: 'get_transaction', chain_id, status: 'approved', details: `Retrieved tx ${hash.slice(0, 10)}...` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(tx, null, 2) }] };

@@ -12,7 +12,7 @@ const TEST_PASSWORD = 'test-password';
 
 const DEPLOYER_CONFIG: AgentConfig = {
   name: 'deployer',
-  chains: [11155111],
+  chains: [11155111, 31337],
   tx_rules: {
     allowed_types: ['deploy', 'write', 'read', 'simulate'],
     limits: {},
@@ -34,8 +34,9 @@ describe('createAgentContext', () => {
     testDir = await mkdtemp(join(tmpdir(), 'chainvault-context-'));
     await MasterVault.init(testDir, TEST_PASSWORD);
     const vault = await MasterVault.unlock(testDir, TEST_PASSWORD);
-    await vault.addKey('my-wallet', TEST_PRIVATE_KEY, [1, 11155111]);
+    await vault.addKey('my-wallet', TEST_PRIVATE_KEY, [1, 11155111, 31337]);
     await vault.addApiKey('etherscan', 'TEST_API_KEY', 'https://api.etherscan.io');
+    await vault.addRpcEndpoint('local-anvil', 'http://127.0.0.1:8545', 31337);
 
     const manager = new AgentVaultManager(testDir, vault);
     const result = await manager.createAgent(DEPLOYER_CONFIG, ['my-wallet'], ['etherscan']);
@@ -51,7 +52,7 @@ describe('createAgentContext', () => {
     const ctx = await createAgentContext(testDir, vaultKey);
     expect(ctx).not.toBeNull();
     expect(ctx!.agentName).toBe('deployer');
-    expect(ctx!.config.chains).toEqual([11155111]);
+    expect(ctx!.config.chains).toEqual([11155111, 31337]);
     expect(ctx!.rules).toBeDefined();
   });
 
@@ -94,6 +95,12 @@ describe('createAgentContext', () => {
     const ctx = await createAgentContext(testDir, vaultKey);
     const apiKey = ctx!.getApiKey('nonexistent');
     expect(apiKey).toBeNull();
+  });
+
+  it('resolves RPC URLs from the agent vault endpoints', async () => {
+    const ctx = await createAgentContext(testDir, vaultKey);
+    expect(ctx!.getRpcUrlForChain(31337)).toBe('http://127.0.0.1:8545');
+    expect(ctx!.getRpcUrlForChain(1)).toBeNull();
   });
 
   it('throws with invalid vault key', async () => {
