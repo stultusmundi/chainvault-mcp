@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, webSocket, fallback, formatEther, formatGwei, parseEther, defineChain, type PublicClient, type Transport } from 'viem';
+import { createPublicClient, createWalletClient, http, webSocket, fallback, formatEther, formatGwei, defineChain, type PublicClient, type Transport } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { getChainConfig, type ChainConfig } from './chains.js';
 import type {
@@ -121,7 +121,7 @@ export class EvmAdapter implements ChainAdapter {
         functionName: params.functionName,
         args: params.args,
         account: params.account as `0x${string}`,
-        value: params.value ? parseEther(params.value) : undefined,
+        value: params.value ? BigInt(params.value) : undefined,
       });
       return { success: true, result: result.result };
     } catch (err: any) {
@@ -159,7 +159,7 @@ export class EvmAdapter implements ChainAdapter {
   async estimateGas(params: EstimateGasParams): Promise<GasEstimate> {
     const gasLimit = await this.client.estimateGas({
       to: params.to as `0x${string}`,
-      value: parseEther(params.value || '0'),
+      value: BigInt(params.value || '0'),
       data: params.data as `0x${string}` | undefined,
     });
     const gasPrice = await this.client.getGasPrice();
@@ -218,7 +218,7 @@ export class EvmAdapter implements ChainAdapter {
         args: params.args,
         account,
         chain,
-        value: params.value ? parseEther(params.value) : undefined,
+        value: params.value ? BigInt(params.value) : undefined,
       });
 
       return { hash };

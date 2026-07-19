@@ -70,4 +70,11 @@ describe('AuditStore', () => {
     const store2 = new AuditStore(db);
     expect(store2.getEntries()).toHaveLength(1);
   });
+
+  it('logs an error status entry', () => {
+    store.log({ agent: 'a', action: 'deploy_contract', chain_id: 31337, status: 'error', details: 'RPC unreachable' });
+    const rows = store.getEntries({ status: 'error' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('error');
+  });
 });

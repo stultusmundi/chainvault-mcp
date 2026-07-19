@@ -4,10 +4,20 @@ Secure MCP server gateway between AI agents and EVM blockchains with vault-based
 
 ## Quick Reference
 
+**Build & Type Check:**
 - Build: `npm run build`
-- Test: `npx vitest run`
-- Test watch: `npx vitest`
 - Type check: `npx tsc --noEmit`
+
+**Test Tiers (see CONTRIBUTING.md for details):**
+- Unit (PR gate, offline): `npx vitest run --project unit`
+- Anvil workstyle (PR gate, needs Foundry + solc): `npm run test:workstyle`
+- All local (unit + anvil + live): `npx vitest run`
+- Fork (mainnet protocols, nightly): `WORKSTYLE_FORK=1 npm run test:fork`
+- Testnet (Sepolia smoke, nightly): `npm run test:testnet`
+- LLM scenarios (nightly): `npm run test:scenarios`
+
+**Development:**
+- Test watch: `npx vitest`
 - Single test: `npx vitest run path/to/file.test.ts`
 
 ## Architecture

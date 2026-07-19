@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseEther } from 'viem';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { EvmAdapter } from '../../chain/evm-adapter.js';
 import { getChainConfig } from '../../chain/chains.js';
@@ -10,11 +11,27 @@ const noop: AuditFn = () => {};
 
 /**
  * Strips potential key material from error messages before returning to agents.
- * Redacts anything that looks like a private key (0x + 64 hex chars).
+ * Redacts anything that looks like a private key (0x + 64 hex chars), then
+ * redacts any URL — viem embeds the full request URL (which for custom vault
+ * RPC endpoints can carry provider API keys, e.g. .../v3/<key>) into error
+ * messages such as HttpRequestError, and this must never reach an agent-visible
+ * tool response or an audit row.
  */
-function sanitizeError(err: unknown): string {
+export function sanitizeError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  return msg.replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]');
+  return msg
+    .replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]')
+    .replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"')]+/gi, 'https://[REDACTED]');
+}
+
+/**
+ * JSON.stringify cannot serialize bigint, but viem returns raw bigint values
+ * for uint/int ABI types (contract reads, simulation results, event args).
+ * Stringify with a replacer that renders bigints as decimal strings so
+ * tool responses never crash on a plain uint256 read.
+ */
+export function toJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
 }
 
 function checkChainAccess(ctx: AgentContext | null, chainId: number): string | null {
@@ -74,7 +91,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       }
 
       try {
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx!.getRpcUrlForChain(chain_id) ?? undefined);
         const parsedAbi = JSON.parse(abi);
         const result = await adapter.deployContract({
           abi: parsedAbi,
@@ -92,7 +109,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           }, null, 2) }],
         };
       } catch (e: unknown) {
-        audit({ action: 'deploy_contract', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'deploy_contract', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -127,7 +144,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       }
 
       try {
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx!.getRpcUrlForChain(chain_id) ?? undefined);
         const parsedAbi = JSON.parse(abi);
         const result = await adapter.writeContract({
           address,
@@ -135,7 +152,9 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           functionName: function_name,
           args: args ?? [],
           privateKey,
-          value,
+          // Tool input, rules engine, and spend tracking are all ETH-denominated;
+          // only the adapter (and the underlying viem call) needs wei.
+          value: value ? parseEther(value).toString() : undefined,
         });
         // Record spend for limit tracking
         const spendValue = parseFloat(value ?? '0');
@@ -145,7 +164,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           content: [{ type: 'text' as const, text: JSON.stringify({ hash: result.hash }, null, 2) }],
         };
       } catch (e: unknown) {
-        audit({ action: 'interact_contract', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'interact_contract', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -209,7 +228,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         audit({ action: 'verify_contract', chain_id, status: 'approved', details: `Verified ${contract_name}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
       } catch (e: unknown) {
-        audit({ action: 'verify_contract', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'verify_contract', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -238,12 +257,12 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       }
 
       try {
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx?.getRpcUrlForChain(chain_id) ?? undefined);
         const balance = await adapter.getBalance(address);
         audit({ action: 'get_balance', chain_id, status: 'approved', details: 'Retrieved balance' });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(balance, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: toJson(balance) }] };
       } catch (e: unknown) {
-        audit({ action: 'get_balance', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'get_balance', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -272,7 +291,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
 
       try {
         const parsedAbi = JSON.parse(abi);
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx?.getRpcUrlForChain(chain_id) ?? undefined);
         const result = await adapter.readContract({
           address,
           abi: parsedAbi,
@@ -280,9 +299,9 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           args: args ?? [],
         });
         audit({ action: 'get_contract_state', chain_id, status: 'approved', details: `Read ${function_name}` });
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ result }, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: toJson({ result }) }] };
       } catch (e: unknown) {
-        audit({ action: 'get_contract_state', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'get_contract_state', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -318,19 +337,27 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         }
 
         const parsedAbi = JSON.parse(abi);
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx!.getRpcUrlForChain(chain_id) ?? undefined);
         const result = await adapter.simulateTransaction({
           address,
           abi: parsedAbi,
           functionName: function_name,
           args: args ?? [],
           account: agentKey.address,
-          value,
+          // Tool input is ETH-denominated (like interact_contract); only the
+          // adapter (and the underlying viem call) needs wei.
+          value: value ? parseEther(value).toString() : undefined,
         });
+        // The adapter surfaces raw err.message on simulation failure — this
+        // bypasses the catch-block sanitizeError() calls below, so sanitize
+        // it explicitly before it can reach the agent or the audit log.
+        if (!result.success && result.error) {
+          result.error = sanitizeError(result.error);
+        }
         audit({ action: 'simulate_transaction', chain_id, status: 'approved', details: `Simulated ${function_name}` });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: toJson(result) }] };
       } catch (e: unknown) {
-        audit({ action: 'simulate_transaction', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'simulate_transaction', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -360,7 +387,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
 
       try {
         const parsedAbi = JSON.parse(abi);
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx?.getRpcUrlForChain(chain_id) ?? undefined);
         const events = await adapter.getEvents({
           address,
           abi: parsedAbi,
@@ -369,9 +396,9 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           toBlock: to_block !== undefined ? BigInt(to_block) : undefined,
         });
         audit({ action: 'get_events', chain_id, status: 'approved', details: `Queried ${event_name} events` });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(events, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: toJson(events) }] };
       } catch (e: unknown) {
-        audit({ action: 'get_events', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'get_events', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },
@@ -396,12 +423,12 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       }
 
       try {
-        const adapter = EvmAdapter.fromChainId(chain_id);
+        const adapter = EvmAdapter.fromChainId(chain_id, ctx?.getRpcUrlForChain(chain_id) ?? undefined);
         const tx = await adapter.getTransaction(hash);
         audit({ action: 'get_transaction', chain_id, status: 'approved', details: `Retrieved tx ${hash.slice(0, 10)}...` });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(tx, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: toJson(tx) }] };
       } catch (e: unknown) {
-        audit({ action: 'get_transaction', chain_id, status: 'approved', details: `Error: ${sanitizeError(e)}` });
+        audit({ action: 'get_transaction', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
       }
     },

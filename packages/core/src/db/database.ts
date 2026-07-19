@@ -1,4 +1,4 @@
-import Database, { type Database as DatabaseType } from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 
@@ -20,7 +20,7 @@ const MIGRATIONS = [
     agent TEXT NOT NULL,
     action TEXT NOT NULL,
     chain_id INTEGER NOT NULL,
-    status TEXT NOT NULL CHECK(status IN ('approved', 'denied')),
+    status TEXT NOT NULL CHECK(status IN ('approved', 'denied', 'error')),
     details TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_entries(agent)`,
@@ -28,13 +28,37 @@ const MIGRATIONS = [
 ];
 
 export class ChainVaultDB {
-  private db: DatabaseType;
+  private db: DatabaseSync;
 
   constructor(basePath: string) {
     mkdirSync(basePath, { recursive: true });
-    this.db = new Database(join(basePath, DB_FILENAME));
-    this.db.pragma('journal_mode = WAL');
+    this.db = new DatabaseSync(join(basePath, DB_FILENAME));
+    this.db.exec('PRAGMA journal_mode = WAL');
+    this.rebuildAuditTableIfNeeded();
     this.runMigrations();
+  }
+
+  private rebuildAuditTableIfNeeded(): void {
+    const row = this.db
+      .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'audit_entries'`)
+      .get() as unknown as { sql: string } | undefined;
+    if (!row || row.sql.includes(`'error'`)) return;
+    this.db.exec(`
+      BEGIN;
+      ALTER TABLE audit_entries RENAME TO audit_entries_old;
+      CREATE TABLE audit_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        agent TEXT NOT NULL,
+        action TEXT NOT NULL,
+        chain_id INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('approved', 'denied', 'error')),
+        details TEXT NOT NULL
+      );
+      INSERT INTO audit_entries SELECT * FROM audit_entries_old;
+      DROP TABLE audit_entries_old;
+      COMMIT;
+    `);
   }
 
   private runMigrations(): void {
@@ -43,7 +67,7 @@ export class ChainVaultDB {
     }
   }
 
-  getDB(): DatabaseType {
+  getDB(): DatabaseSync {
     return this.db;
   }
 

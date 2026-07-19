@@ -41,4 +41,32 @@ describe('ChainVaultDB', () => {
     db.close();
     db.close();
   });
+
+  it('rebuilds a pre-error-status audit table in place', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const { join } = await import('node:path');
+    const { unlinkSync } = await import('node:fs');
+    // Close the existing DB and delete it to start fresh
+    db.close();
+    unlinkSync(join(testDir, 'chainvault.db'));
+
+    // Hand-create the OLD schema, with a row, then reopen via ChainVaultDB
+    const raw = new DatabaseSync(join(testDir, 'chainvault.db'));
+    raw.exec(`CREATE TABLE audit_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, agent TEXT NOT NULL,
+      action TEXT NOT NULL, chain_id INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('approved', 'denied')), details TEXT NOT NULL)`);
+    raw.exec(`INSERT INTO audit_entries (timestamp, agent, action, chain_id, status, details)
+      VALUES ('t', 'a', 'x', 1, 'approved', 'd')`);
+    raw.close();
+
+    const upgraded = new ChainVaultDB(testDir);
+    upgraded.getDB().prepare(
+      `INSERT INTO audit_entries (timestamp, agent, action, chain_id, status, details)
+       VALUES ('t2', 'a', 'x', 1, 'error', 'boom')`,
+    ).run();
+    const count = upgraded.getDB().prepare('SELECT COUNT(*) AS c FROM audit_entries').get() as unknown as { c: number };
+    expect(count.c).toBe(2);
+    upgraded.close();
+  });
 });

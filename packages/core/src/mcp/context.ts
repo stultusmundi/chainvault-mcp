@@ -4,8 +4,13 @@ import { decrypt } from '../vault/crypto.js';
 import { AgentVaultDataSchema, type AgentConfig } from '../vault/types.js';
 import { RulesEngine } from '../rules/engine.js';
 import { readFile } from 'node:fs/promises';
+import type { SpendStore } from '../db/spend-store.js';
 
 const AGENTS_DIR = 'agents';
+
+export interface AgentContextOptions {
+  spendStore?: SpendStore;
+}
 
 export interface AgentKeyInfo {
   name: string;
@@ -21,6 +26,7 @@ export interface AgentContext {
   getPrivateKeyForChain(chainId: number): string | null;
   getApiKey(serviceName: string): { key: string; baseUrl: string } | null;
   getApiKeyForExplorer(explorerApiUrl: string): { serviceName: string; key: string } | null;
+  getRpcUrlForChain(chainId: number): string | null;
 }
 
 /**
@@ -33,6 +39,7 @@ export interface AgentContext {
 export async function createAgentContext(
   basePath: string,
   vaultKey: string | undefined,
+  options?: AgentContextOptions,
 ): Promise<AgentContext | null> {
   if (!vaultKey) {
     return null;
@@ -70,7 +77,10 @@ export async function createAgentContext(
         }),
       );
 
-      const rules = new RulesEngine(vaultData.config);
+      const rules = new RulesEngine(vaultData.config, {
+        spendStore: options?.spendStore,
+        agentName: vaultData.agent_name,
+      });
 
       // Controlled accessors — vaultData stays in closure, never exposed
       const getPrivateKeyForChain = (chainId: number): string | null => {
@@ -100,6 +110,13 @@ export async function createAgentContext(
         return null;
       };
 
+      const getRpcUrlForChain = (chainId: number): string | null => {
+        for (const ep of Object.values(vaultData.rpc_endpoints)) {
+          if (ep.chain_id === chainId) return ep.url;
+        }
+        return null;
+      };
+
       return {
         agentName: vaultData.agent_name,
         config: vaultData.config,
@@ -108,6 +125,7 @@ export async function createAgentContext(
         getPrivateKeyForChain,
         getApiKey,
         getApiKeyForExplorer,
+        getRpcUrlForChain,
       };
     } catch {
       // Wrong key for this vault file, try the next one

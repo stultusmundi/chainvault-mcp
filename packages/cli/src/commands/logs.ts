@@ -14,7 +14,8 @@ export async function viewLogs(
 
   return entries
     .map((e) => {
-      const status = e.status === 'denied' ? 'DENIED' : 'OK';
+      const status =
+        e.status === 'denied' ? 'DENIED' : (e.status as string) === 'error' ? 'ERROR' : 'OK';
       return `[${e.timestamp}] ${status} ${e.agent} ${e.action} chain=${e.chain_id} ${e.details}`;
     })
     .join('\n');

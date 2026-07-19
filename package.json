@@ -1,6 +1,6 @@
 {
-  "name": "chainvault-mcp",
-  "version": "0.1.0",
+  "name": "chainvault-mcp-monorepo",
+  "version": "1.0.0",
   "private": true,
   "description": "Secure MCP server gateway between AI agents and blockchains",
   "workspaces": [
@@ -11,18 +11,23 @@
     "build": "bash scripts/build.sh",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:workstyle": "vitest run --project anvil",
+    "test:fork": "WORKSTYLE_FORK=1 vitest run --project fork",
+    "test:testnet": "vitest run --project testnet",
+    "test:scenarios": "npm run build && tsx tests/agent-e2e/run-scenarios.ts",
     "lint": "tsc --noEmit",
     "chainvault": "node packages/cli/dist/index.js",
     "serve": "node packages/cli/dist/index.js serve"
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.80",
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.13.0",
     "dotenv": "^17.3.1",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.13.0"
   }
 }

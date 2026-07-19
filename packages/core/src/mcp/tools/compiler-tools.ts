@@ -50,7 +50,7 @@ export function registerCompilerTools(server: McpServer, audit: AuditFn = noop):
         };
       } catch (e: unknown) {
         const msg = sanitizeError(e);
-        audit({ action: 'compile_contract', status: 'approved', details: `Error: ${msg.slice(0, 100)}` });
+        audit({ action: 'compile_contract', status: 'error', details: `Error: ${msg.slice(0, 100)}` });
         if (msg.includes('docker') || msg.includes('solc') || msg.includes('ENOENT') || msg.includes('not found')) {
           return {
             content: [{

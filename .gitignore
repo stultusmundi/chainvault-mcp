@@ -6,3 +6,5 @@ dist/
 !.env.example
 coverage/
 .chainvault-dev/
+.DS_Store
+tests/workstyle/.artifacts/

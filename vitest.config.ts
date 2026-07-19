@@ -9,11 +9,55 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    include: ['packages/*/src/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts'],
       exclude: ['**/*.test.ts', '**/*.test.tsx', '**/*.d.ts'],
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['packages/*/src/**/*.test.{ts,tsx}'],
+          exclude: ['packages/core/src/chain/e2e.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'live',
+          include: ['packages/core/src/chain/e2e.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'anvil',
+          include: ['tests/workstyle/**/*.test.ts'],
+          exclude: ['tests/workstyle/fork/**', 'tests/workstyle/testnet/**'],
+          testTimeout: 60_000,
+          hookTimeout: 120_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'fork',
+          include: ['tests/workstyle/fork/**/*.test.ts'],
+          testTimeout: 120_000,
+          hookTimeout: 300_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'testnet',
+          include: ['tests/workstyle/testnet/**/*.test.ts'],
+          testTimeout: 300_000,
+          hookTimeout: 300_000,
+        },
+      },
+    ],
   },
 });

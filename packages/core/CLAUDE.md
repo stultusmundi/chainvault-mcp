@@ -5,7 +5,7 @@ MCP server core with vault, rules, chain, proxy, and audit modules.
 ## Module Boundaries
 
 - `vault/` — Encryption, master vault, agent vaults. NEVER import from `chain/` or `proxy/`
-- `rules/` — Rule engine. Depends only on `vault/types.ts` for AgentConfig
+- `rules/` — Rule engine. Depends on `vault/types.ts` for AgentConfig; may also import `db/spend-store` for persistent spend tracking
 - `chain/` — ChainAdapter interface + EVM implementation. NEVER import from `vault/` directly
 - `proxy/` — API proxy with caching/rate limiting. Standalone, no vault imports
 - `audit/` — Append-only logger. Standalone, no vault imports

@@ -1,21 +1,32 @@
 {
   "name": "@chainvault/core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "ChainVault MCP core server and modules",
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stultusmundi/chainvault-mcp.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "echo 'Use npm run build from root (esbuild)'"
+    "build": "echo 'Use npm run build from root (esbuild)'",
+    "prepublishOnly": "cd ../.. && npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",
     "@simplewebauthn/server": "^13.3.0",
-    "better-sqlite3": "^12.8.0",
     "viem": "^2.30.0",
     "zod": "^3.25.0"
   },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13"
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

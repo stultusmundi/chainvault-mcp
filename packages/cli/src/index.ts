@@ -20,7 +20,7 @@ const program = new Command();
 program
   .name('chainvault')
   .description('Secure MCP server gateway between AI agents and blockchains')
-  .version('0.1.0');
+  .version('1.0.0');
 
 // --- Init ---
 

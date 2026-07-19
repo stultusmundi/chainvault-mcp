@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createPublicClient } from 'viem';
 import { EvmAdapter } from './evm-adapter.js';
 import type { ChainAdapter } from './types.js';
 
@@ -69,6 +70,37 @@ describe('EvmAdapter - Read Operations', () => {
     expect(result.success).toBe(true);
   });
 
+  it('forwards value in wei to simulateContract for payable calls', async () => {
+    await adapter.simulateTransaction({
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      abi: [{ inputs: [], name: 'deposit', outputs: [], stateMutability: 'payable', type: 'function' }],
+      functionName: 'deposit',
+      args: [],
+      account: '0x1234567890abcdef1234567890abcdef12345678',
+      value: '500000000000000000', // 0.5 ETH in wei
+    });
+
+    const client = vi.mocked(createPublicClient).mock.results.at(-1)!.value;
+    expect(client.simulateContract).toHaveBeenCalledWith(
+      expect.objectContaining({ value: 500000000000000000n }),
+    );
+  });
+
+  it('passes undefined value to simulateContract when no value given', async () => {
+    await adapter.simulateTransaction({
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      abi: [{ inputs: [], name: 'mint', outputs: [], stateMutability: 'nonpayable', type: 'function' }],
+      functionName: 'mint',
+      args: [],
+      account: '0x1234567890abcdef1234567890abcdef12345678',
+    });
+
+    const client = vi.mocked(createPublicClient).mock.results.at(-1)!.value;
+    expect(client.simulateContract).toHaveBeenCalledWith(
+      expect.objectContaining({ value: undefined }),
+    );
+  });
+
   it('gets contract events', async () => {
     const result = await adapter.getEvents({
       address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
@@ -133,44 +165,60 @@ describe('EvmAdapter.fromChainId', () => {
   });
 });
 
-describe('EvmAdapter - Decimal ETH value handling (parseEther)', () => {
+describe('EvmAdapter - estimateGas value forwarding (wei)', () => {
+  // ChainAdapter is a wei-denominated boundary end-to-end (same contract as
+  // simulateTransaction/writeContract above): callers convert ETH -> wei
+  // with parseEther at the MCP handler layer (see chain-tools.ts), and the
+  // adapter forwards the wei string as a BigInt. estimateGas must follow the
+  // same contract — it must NOT re-run parseEther on an already-wei value,
+  // which would silently multiply the amount by 1e18.
   let adapter: ChainAdapter;
 
   beforeEach(() => {
     adapter = new EvmAdapter('https://rpc.example.com', 11155111);
   });
 
-  it('estimates gas with decimal ETH value', async () => {
-    const estimate = await adapter.estimateGas({
+  it('forwards a wei value to client.estimateGas as a BigInt', async () => {
+    await adapter.estimateGas({
       to: '0x1234567890abcdef1234567890abcdef12345678',
-      value: '0.5',
+      value: '500000000000000000', // 0.5 ETH in wei
     });
-    expect(estimate.gasLimit).toBeDefined();
-    expect(estimate.gasPriceGwei).toBeDefined();
-    expect(estimate.estimatedCostEth).toBeDefined();
 
-    // Verify parseEther conversion: 0.5 ETH = 500000000000000000 wei
-    const { parseEther, createPublicClient } = await import('viem');
+    const { createPublicClient } = await import('viem');
     const mockClient = (createPublicClient as any).mock.results.at(-1).value;
     expect(mockClient.estimateGas).toHaveBeenCalledWith(
-      expect.objectContaining({ value: parseEther('0.5') }),
+      expect.objectContaining({ value: 500000000000000000n }),
     );
   });
 
-  it('estimates gas with integer ETH value', async () => {
-    const estimate = await adapter.estimateGas({
+  it('defaults to 0n when no value is given', async () => {
+    await adapter.estimateGas({
       to: '0x1234567890abcdef1234567890abcdef12345678',
-      value: '1',
+      value: '',
     });
-    expect(estimate.gasLimit).toBeDefined();
-    expect(estimate.gasPriceGwei).toBeDefined();
-    expect(estimate.estimatedCostEth).toBeDefined();
 
-    // Verify parseEther conversion: 1 ETH = 1000000000000000000 wei (not BigInt('1') = 1n)
-    const { parseEther, createPublicClient } = await import('viem');
+    const { createPublicClient } = await import('viem');
     const mockClient = (createPublicClient as any).mock.results.at(-1).value;
     expect(mockClient.estimateGas).toHaveBeenCalledWith(
-      expect.objectContaining({ value: parseEther('1') }),
+      expect.objectContaining({ value: 0n }),
+    );
+  });
+
+  it('does not crash and does not silently scale an already-wei value (regression for #18)', async () => {
+    // A decimal *ETH* string reaching this method would previously crash
+    // BigInt('0.5'); it must never be handed a decimal string in the first
+    // place because callers convert to wei first. Guard the contract here:
+    // an integer wei string must round-trip byte-for-byte, not get
+    // multiplied by 1e18 the way `parseEther` would.
+    await adapter.estimateGas({
+      to: '0x1234567890abcdef1234567890abcdef12345678',
+      value: '1000000000000000000', // 1 ETH, already in wei
+    });
+
+    const { createPublicClient } = await import('viem');
+    const mockClient = (createPublicClient as any).mock.results.at(-1).value;
+    expect(mockClient.estimateGas).toHaveBeenCalledWith(
+      expect.objectContaining({ value: 1000000000000000000n }),
     );
   });
 });

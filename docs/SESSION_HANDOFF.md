@@ -1,123 +1,150 @@
-# Session Handoff — 2026-03-25
+# Session Handoff — 2026-07-19
 
-## Current State
+## Status: v1.0.0 Prepared (not yet merged or published)
 
-- **Branch:** `feat/mcp-tier2-tier3` (also has security fixes on top)
-- **Tests:** 455 passing across 34 test files
-- **Build:** esbuild via `npm run build` (tsc OOMs on viem types)
-- **Open PR:** #7 (`feat/mcp-tier2-tier3`) — Tier 2+3 tool wiring, but security fixes (commits `af2c198`–`4dccd3c`) were added after. Needs updating or a new PR.
-- **Dev vault:** `.chainvault-dev/` with password `chainvault`, agent `dev-agent` with vault key `cv_agent_687c8827ae5f6d601d9b33cabf5e1fef7713ba0ea8fe0275bdeab289c7ac5280`
+**Branch:** `feat/workstyle-testing` (draft PR #23 into `main`, pending final review + merge)
+**Version:** 1.0.0 (will be published to npm once the owner sets NPM_TOKEN, pushes the tag, and creates a GitHub Release — publishing the Release, not the tag push, is what triggers `.github/workflows/publish.yml`)
+**Tests:** 469 total (415 unit + 54 anvil) on every PR; nightly adds live/fork/testnet/scenarios
 
-## What's Complete
+v1.0.0 is PREPARED but not yet published. `publish.yml` triggers on a GitHub Release being **published**, not on a tag push — a pushed tag alone will not publish to npm. Owner workflow:
+1. Set the `NPM_TOKEN` secret in GitHub repo settings, and ensure the `@chainvault` npm scope/org exists (first `--access public` publish under a scope needs the org to exist)
+2. Create and push the v1.0.0 git tag: `git tag v1.0.0 && git push origin v1.0.0`
+3. Create the GitHub Release from that tag: `gh release create v1.0.0` — publishing this Release is what triggers `.github/workflows/publish.yml`
+4. Verify both packages appear on npm: `npm view @chainvault/core version`, `npm view chainvault-mcp version`
 
-### Core Modules (all tested)
+## Current Implementation State
+
+### Core Modules (100% tested)
 - **Vault:** Master vault, agent vaults, AES-256-GCM encryption, HKDF, WebAuthn/passkey, DualKeyManager
 - **Rules Engine:** Chain access, tx type filtering, per-tx/daily/monthly spend limits, contract whitelist/blacklist, API access rules
-- **Chain Module:** 14 EVM chains with PublicNode RPCs (WS priority, HTTP fallback), faucet support, EvmAdapter with read + write operations
-- **API Proxy:** Caching, per-second + daily rate limiting, usage tracking
-- **Audit:** AuditStore (SQLite) + AuditLogger (file-based legacy)
-- **Compiler:** Solidity compilation via Docker solc or local binary
-- **Database:** SQLite persistence for spend tracking + audit logs
+- **Chain Module:** 14 EVM chains with PublicNode RPCs (WS priority, HTTP fallback), faucet support, EvmAdapter read + write, contract compilation
+- **API Proxy:** Caching (5-min TTL), per-second + daily rate limiting, usage tracking
+- **Audit:** AuditStore (SQLite `node:sqlite`), AuditLogger (file-based legacy), audit error status
+- **Database:** SQLite persistence for spend tracking + audit logs (migrated from `better-sqlite3`)
+- **MCP Server:** All 16 tools wired — zero stubs. RPC resolution from agent vault endpoints.
 
-### MCP Server (all 15 tools wired — zero stubs)
-| Tool | Backend |
-|------|---------|
-| `list_chains` | Agent config |
-| `list_capabilities` | Agent config |
-| `get_agent_address` | Agent vault (public addr only) |
-| `get_balance` | EvmAdapter + rules |
-| `get_contract_state` | EvmAdapter + rules |
-| `get_transaction` | EvmAdapter + rules |
-| `get_events` | EvmAdapter + rules |
-| `simulate_transaction` | EvmAdapter + rules |
-| `deploy_contract` | EvmAdapter + rules + private key + spend tracking |
-| `interact_contract` | EvmAdapter + rules + private key + spend tracking |
-| `verify_contract` | Etherscan API + vault API key |
-| `compile_contract` | solc via Docker/local |
-| `query_explorer` | ApiProxy + vault API key + rate limits |
-| `query_price` | CoinGecko public API |
-| `list_supported_chains` | Chain registry |
-| `request_faucet` | Faucet module |
+### Product Bug Fixes (Discovered & Fixed in Workstyle W0–W5)
+1. **Audit 'error' status** — Error handling for audit logs
+2. **SpendStore persistence wiring** — Spend tracking now wired into MCP server lifetime
+3. **Vault RPC endpoint resolution** — `AgentContext.getRpcUrlForChain()` exposes agent vault RPC endpoints to tools
+4. **BigInt JSON serialization** — Fixed contract output JSON encoding
+5. **interact value ETH→wei conversion** — value parameter now correctly converted
+6. **simulate value forwarding** — Properly passed through to simulation
+7. **TUI .tsx never compiled** — Build system now includes TUI in output
+8. **Stale test files in tarballs** — Pre-publish cleanup removes unnecessary test files
 
-### Security Hardening (done)
-- Error messages sanitized — `sanitizeError()` strips potential key material
-- Controlled vault accessors — `getPrivateKeyForChain()`, `getApiKeyForExplorer()` instead of raw `vaultData`
-- Spend recorded after successful write operations
-- Audit logging in all MCP tool handlers
-- Rules checked BEFORE vault decryption
+### Test Architecture (Vitest projects)
+| Project | Contents | CI Gate? | Runs | Command |
+|---------|----------|----------|------|---------|
+| `unit` | 415 mocked/offline tests (existing + workstyle W1–W5) | Yes (PR) | Always | `npx vitest run --project unit` |
+| `anvil` | 54 local anvil deterministic suites (W4–W5 lifecycle+edge) | Yes (PR) | Always | `npm run test:workstyle` |
+| `live` | Public-RPC read-only tests on real chains | No | Nightly | `npm run test` (default includes) |
+| `fork` | Real protocols (WETH, USDT, Uniswap) on mainnet fork | No | Nightly | `WORKSTYLE_FORK=1 npm run test:fork` |
+| `testnet` | Sepolia smoke test (optional; skips if no TESTNET_PRIVATE_KEY) | No | Nightly/Manual | `npm run test:testnet` |
+| `scenarios` | LLM agent workflow end-to-end tests (requires ANTHROPIC_API_KEY) | No | Nightly | `npm run test:scenarios` |
 
-### TUI (6 screens, all e2e tested)
-Dashboard, Keys, Agents, Services, Logs, Rules — 128+ e2e tests
+### CI Workflow (`ci.yml`)
+- Runs on every PR + push to main
+- **Job A (Node 22.x + 24.x):** `npm ci`, `tsc --noEmit`, `npm run build`, `vitest run --project unit`
+- **Job B (Foundry):** `npm run test:workstyle` (anvil project)
+- Both jobs required for merge
 
-### Infrastructure
-- Community files: README, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, GitHub templates
-- `.env` support with dotenv
-- Agent e2e tests via Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
-- `chainvault solc pull` CLI command
+### Nightly Workflow (`nightly.yml`)
+- Cron schedule (UTC 03:00)
+- Manual trigger via `workflow_dispatch`
+- Runs `npm run test` (live), `npm run test:fork`, `npm run test:testnet`, `npm run test:scenarios`
+- On failure, opens/updates a tracking issue
+- Secrets: `FORK_RPC_URL` (optional, defaults to `eth.drpc.org` — PublicNode's free tier rejects pinned-block reads), `TESTNET_PRIVATE_KEY` (optional but recommended), `ANTHROPIC_API_KEY` (required for scenarios), `ETHERSCAN_API_KEY` (optional)
 
-## Remaining Items
+## Test Infrastructure Helpers
 
-### Medium Priority — CLI Commands Gap
+Located in `tests/workstyle/helpers/`:
 
-Only 5 of ~20 designed CLI commands are wired in `packages/cli/src/index.ts`:
+- **AnvilHarness** — Spawns/manages local anvil process
+  - `start({ mode: 'local' | 'fork', forkUrl?, forkBlock?, chainId? })`
+  - Readiness poll on `eth_chainId`, random free port (suites parallelize)
+  - Deterministic mnemonic accounts via `accounts` property
+  - Helpers: `setBalance()`, `impersonate()`, `snapshot()`/`revert()`, `mine()`, `stop()`
 
-| Wired | Missing |
-|-------|---------|
-| `init` | `unlock`, `lock` |
-| `serve` | `status` |
-| `key list` | `key add`, `key remove`, `key generate`, `key add-seed` |
-| `agent list` | `agent create`, `agent show`, `agent revoke`, `agent rotate-key`, `agent grant`, `agent set-limit`, `agent allow-tx`, `agent set-api-limit` |
-| `solc pull` | `api add`, `api list`, `api remove`, `api add rpc` |
-| | `logs`, `logs <agent>`, `logs --denied` |
+- **VaultFixture** — Real vault setup in temp directory
+  - Inits master vault (password: `test-password`)
+  - Imports anvil private keys
+  - Registers anvil RPC endpoint (chain 31337)
+  - Creates agents with configurable rules
+  - Returns vault keys/paths — no test-only backdoors
 
-Backend implementations exist in `packages/cli/src/commands/key.ts` and `packages/cli/src/commands/agent.ts` — they just need to be wired into Commander in `index.ts`. Some commands (like `key add`) need interactive password prompting since secrets must never be CLI arguments.
+- **Corpus Pipeline** — Compiles `tests/workstyle/contracts/*.sol`
+  - Uses ChainVault's own compiler module
+  - Gitignored artifact cache (keyed by source hash)
+  - Self-contained single-file contracts
 
-### Low Priority — Design Compliance
+- **Secret Sweep** — `assertNoSecrets(value, secrets[])`
+  - Recursively scans tool results, errors, audit rows
+  - Detects raw private keys (with/without `0x`), `cv_agent_*` vault keys, API keys
+  - Prevents accidental secret leakage in test output
 
-1. **Agent vault regeneration on permission change** — Design says "When permissions change, agent vault is regenerated from master vault." Not implemented. Currently you'd delete and recreate the agent.
+## Design & Planning Documents
 
-2. **RPC endpoints in agent vaults** — `AgentVaultManager.createAgent()` already copies matching RPC endpoints into agent vaults, but the MCP `AgentContext` doesn't expose them. Tools use `EvmAdapter.fromChainId()` which reads from the chain registry instead.
+- **Design:** `docs/plans/2026-03-19-chainvault-mcp-design.md` (core architecture)
+- **Implementation:** `docs/plans/2026-03-19-chainvault-mcp-implementation.md` (Task 1–15)
+- **MCP Tool Wiring:** `docs/plans/2026-03-21-mcp-tool-wiring-design.md`
+- **Tier 2+3 Tools:** `docs/plans/2026-03-24-mcp-tier2-tier3-design.md`
+- **Workstyle Testing & Roadmap:** `docs/plans/2026-07-18-workstyle-testing-and-roadmap-design.md` (W0–W9 chunks)
+- **Implementation Plan:** `docs/plans/2026-07-18-workstyle-testing-and-roadmap-implementation.md` (Task 1–25)
+- **Testnet Runbook:** `docs/testnet-runbook.md`
 
-3. **`tests/agent-e2e/claude-code.d.ts`** — Still declares module `@anthropic-ai/claude-code` but code imports from `@anthropic-ai/claude-agent-sdk`. Should be renamed and updated.
+## V2 Roadmap
 
-### Housekeeping
+V2.1 (Slither analysis foundation) is the next phase. **Each V2 chunk opens with its own brainstorm → design doc → implementation plan cycle**, using the design briefs in `docs/plans/2026-07-18-workstyle-testing-and-roadmap-design.md` §5 as the starting point.
 
-- **PR #7** is open but stale — security fix commits (`af2c198`–`4dccd3c`) were pushed to main/branch after PR creation. Should either update the PR or close and create a new one.
-- **Old branches** can be cleaned up: `feat/chainvault-core`, `feat/v1.1-tui-sqlite`, `feat/v1.1-webauthn-compiler`, `feat/e2e_tests`, `feat/mcp-tool-wiring`
+**Sequence:**
+1. **V2.1:** Slither static analysis in Docker, smart MCP orchestration (the differentiator)
+2. **V2.2:** Aderyn analysis
+3. **V2.3/V2.4:** Fuzzing and gas analysis (either order)
+4. **V2.5/V2.6:** Web admin panel and non-EVM adapters (by demand)
 
-### V2 Roadmap (not started)
-- Slither/Aderyn analysis tools (Docker containers)
-- Web admin panel
-- Non-EVM chain adapters (Solana, Move, Bitcoin)
-
-## Key Files
-
-| Purpose | Path |
-|---------|------|
-| Design doc | `docs/plans/2026-03-19-chainvault-mcp-design.md` |
-| Implementation plan | `docs/plans/2026-03-19-chainvault-mcp-implementation.md` |
-| MCP tool wiring design | `docs/plans/2026-03-21-mcp-tool-wiring-design.md` |
-| Tier 2+3 design | `docs/plans/2026-03-24-mcp-tier2-tier3-design.md` |
-| Agent context | `packages/core/src/mcp/context.ts` |
-| MCP server | `packages/core/src/mcp/server.ts` |
-| Chain tools | `packages/core/src/mcp/tools/chain-tools.ts` |
-| CLI entry | `packages/cli/src/index.ts` |
-| Dev vault | `.chainvault-dev/` (password: `chainvault`) |
-| Env config | `.env` (has CHAINVAULT_PASSWORD, CHAINVAULT_PATH, CLAUDE_CODE_OAUTH_TOKEN) |
+Current deferred items:
+- Nightly workflow dispatch verification after merge (post-publication check)
+- Live Sepolia first run (after testnet secret is set)
+- `.d.ts` emission (types fields dropped from package.json — tsc OOMs on viem types)
+- Design-vs-implementation note on secrets held in context closure for server lifetime (decrypt-once-at-init) — flagged for V1.1 decision
 
 ## Commands
 
 ```bash
-npm run build          # esbuild transpile (not tsc)
-npx vitest run         # 455 tests
-npx tsc --noEmit       # type check only
-npx vitest run packages/core/src/mcp/  # MCP tests only
+# Build and tests (local)
+npm run build              # esbuild transpile
+npx vitest run             # all tests (default: unit + anvil + live)
+npx vitest run --project unit     # unit only (PR gate)
+npm run test:workstyle     # anvil workstyle suite
+npm run test:fork          # fork protocol suite (needs WORKSTYLE_FORK=1)
+npm run test:testnet       # Sepolia smoke (needs TESTNET_PRIVATE_KEY)
+npm run test:scenarios     # LLM agent workflows (needs ANTHROPIC_API_KEY)
+npx tsc --noEmit           # type check
 
-# Serve with agent context
-CHAINVAULT_VAULT_KEY=cv_agent_687c8827ae5f6d601d9b33cabf5e1fef7713ba0ea8fe0275bdeab289c7ac5280 \
-  node packages/cli/dist/index.js serve -p .chainvault-dev
+# Watch mode
+npx vitest
 
-# Agent e2e tests (need CLAUDE_CODE_OAUTH_TOKEN in .env)
-npx tsx tests/agent-e2e/chain-discovery.ts
-npx tsx tests/agent-e2e/compile-token.ts
+# Serve MCP with agent vault key
+CHAINVAULT_VAULT_KEY=cv_agent_... node packages/cli/dist/index.js serve -p <vault-path>
 ```
+
+## Known Deferred
+
+- **CLI commands:** Only 5 of ~20 designed commands are wired (init, serve, key list, agent list, solc pull). Backend implementations exist; need wiring in Commander.
+- **Agent vault regeneration:** Design says "regenerate on permission change" — currently requires delete + recreate.
+- **RPC endpoints in agent vaults:** Wired for tooling, but admin interface doesn't yet expose them separately from master vault view.
+
+## Key Files & Contacts
+
+| Purpose | Path |
+|---------|------|
+| Test suite root | `tests/workstyle/` |
+| Test helpers | `tests/workstyle/helpers/` |
+| Test contracts | `tests/workstyle/contracts/` |
+| MCP server | `packages/core/src/mcp/server.ts` |
+| MCP context | `packages/core/src/mcp/context.ts` |
+| CLI entry | `packages/cli/src/index.ts` |
+| Env config | `.env.example` (copy to `.env`) |
+
+**Project Owner Contact:** Via repo or GitHub issues
