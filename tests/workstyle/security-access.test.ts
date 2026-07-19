@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MasterVault, AgentVaultManager, EvmAdapter } from '@chainvault/core';
+import { ChainVaultDB } from '../../packages/core/src/db/database.js';
 import { AnvilHarness, ANVIL_ACCOUNTS, ANVIL_CHAIN_ID, anvilAvailable } from './helpers/anvil.js';
 import { createVaultFixture, type VaultFixture } from './helpers/vault-fixture.js';
 import { compileCorpusContract, compilerAvailable } from './helpers/corpus.js';
@@ -96,6 +97,42 @@ describe.skipIf(!ready)('access control under real conditions', () => {
       function_name: 'deposit', args: [], value: '0.1',
     });
     expect(denied.toLowerCase()).toContain('whitelist');
+  });
+
+  it('attributes audit rows to the correct agent name across two agents', async () => {
+    const reader = await connect('reader');
+    const adminAgent = await connect('admin');
+
+    // reader: denied (read-only agent cannot deploy)
+    await callToolText(reader.client, 'deploy_contract', {
+      chain_id: ANVIL_CHAIN_ID, abi: tokenAbi, bytecode: '0x00', constructor_args: [],
+    });
+    // admin: approved (full-permission agent can read balance)
+    await callToolText(adminAgent.client, 'get_balance', {
+      chain_id: ANVIL_CHAIN_ID, address: ANVIL_ACCOUNTS[0].address,
+    });
+
+    const db = new ChainVaultDB(fixture.basePath);
+    try {
+      const readerRows = db.getDB()
+        .prepare('SELECT * FROM audit_entries WHERE agent = ?')
+        .all('reader') as Array<{ agent: string; action: string; status: string; chain_id: number }>;
+      const adminRows = db.getDB()
+        .prepare('SELECT * FROM audit_entries WHERE agent = ?')
+        .all('admin') as Array<{ agent: string; action: string; status: string; chain_id: number }>;
+
+      expect(readerRows.every((r) => r.agent === 'reader')).toBe(true);
+      expect(adminRows.every((r) => r.agent === 'admin')).toBe(true);
+      expect(readerRows.some((r) => r.action === 'deploy_contract' && r.status === 'denied')).toBe(true);
+      expect(adminRows.some((r) => r.action === 'get_balance' && r.status === 'approved')).toBe(true);
+      // Cross-check: reader never calls get_balance in this suite, and admin's
+      // only deploy_contract attempt targets chain 1 (not ANVIL_CHAIN_ID) — so
+      // neither agent's bucket should pick up the other's specific row.
+      expect(readerRows.some((r) => r.action === 'get_balance')).toBe(false);
+      expect(adminRows.some((r) => r.action === 'deploy_contract' && r.chain_id === ANVIL_CHAIN_ID)).toBe(false);
+    } finally {
+      db.close();
+    }
   });
 
   it('rotation invalidates the old vault key for new connections', async () => {

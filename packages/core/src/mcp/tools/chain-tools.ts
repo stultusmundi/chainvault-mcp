@@ -260,7 +260,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         const adapter = EvmAdapter.fromChainId(chain_id, ctx?.getRpcUrlForChain(chain_id) ?? undefined);
         const balance = await adapter.getBalance(address);
         audit({ action: 'get_balance', chain_id, status: 'approved', details: 'Retrieved balance' });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(balance, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: toJson(balance) }] };
       } catch (e: unknown) {
         audit({ action: 'get_balance', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };
@@ -426,7 +426,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         const adapter = EvmAdapter.fromChainId(chain_id, ctx?.getRpcUrlForChain(chain_id) ?? undefined);
         const tx = await adapter.getTransaction(hash);
         audit({ action: 'get_transaction', chain_id, status: 'approved', details: `Retrieved tx ${hash.slice(0, 10)}...` });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(tx, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: toJson(tx) }] };
       } catch (e: unknown) {
         audit({ action: 'get_transaction', chain_id, status: 'error', details: `Error: ${sanitizeError(e)}` });
         return { content: [{ type: 'text' as const, text: `Error: ${sanitizeError(e)}` }] };

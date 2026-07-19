@@ -80,11 +80,11 @@ The GitHub workflows use the following repository secrets for extended test tier
 
 | Secret | Used by | Purpose | Required? |
 |--------|---------|---------|-----------|
-| `FORK_RPC_URL` | `nightly.yml` fork tier | Mainnet RPC for `--fork-url` (defaults to PublicNode if not set) | Optional |
+| `FORK_RPC_URL` | `nightly.yml` fork tier | Mainnet RPC for `--fork-url` (defaults to `eth.drpc.org` if not set — PublicNode rejects pinned-block reads) | Optional |
 | `TESTNET_PRIVATE_KEY` | `nightly.yml` testnet tier | Funded throwaway Sepolia key for live smoke tests. See [`docs/testnet-runbook.md`](docs/testnet-runbook.md) for provisioning. | Optional |
 | `ETHERSCAN_API_KEY` | `nightly.yml` testnet tier | Enables `verify_contract` and explorer tests. | Optional |
 | `ANTHROPIC_API_KEY` | `nightly.yml` scenarios | LLM-driven agent workflow end-to-end tests. | Optional (scenarios skip if not set) |
-| `NPM_TOKEN` | `.github/workflows/publish.yml` | Publishes v1.0.0 to npm when tag is pushed. See publish workflow for setup. | Required for release |
+| `NPM_TOKEN` | `.github/workflows/publish.yml` | Publishes to npm when a GitHub release is published (not on tag push). See publish workflow for setup. | Required for release |
 
 The `unit` and `anvil` projects (PR gate) require **no secrets** and run offline.
 

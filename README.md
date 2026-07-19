@@ -3,7 +3,7 @@
 **Your AI agent gets blockchain superpowers without ever touching a private key.**
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![Node: >=20](https://img.shields.io/badge/Node-%3E%3D20-green.svg)
+![Node: >=22.13](https://img.shields.io/badge/Node-%3E%3D22.13-green.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)
 [![CI](https://github.com/stultusmundi/chainvault-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/stultusmundi/chainvault-mcp/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/chainvault-mcp.svg)](https://www.npmjs.com/package/chainvault-mcp)

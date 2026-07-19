@@ -3,14 +3,14 @@
 ## Status: v1.0.0 Prepared (not yet merged or published)
 
 **Branch:** `feat/workstyle-testing` (draft PR #23 into `main`, pending final review + merge)
-**Version:** 1.0.0 (will be published to npm once the owner sets NPM_TOKEN and creates the GitHub release via .github/workflows/publish.yml)
-**Tests:** 449 total (397 unit + 52 anvil) on every PR; nightly adds live/fork/testnet/scenarios
+**Version:** 1.0.0 (will be published to npm once the owner sets NPM_TOKEN, pushes the tag, and creates a GitHub Release — publishing the Release, not the tag push, is what triggers `.github/workflows/publish.yml`)
+**Tests:** 469 total (415 unit + 54 anvil) on every PR; nightly adds live/fork/testnet/scenarios
 
-v1.0.0 is PREPARED but not yet published. Owner workflow:
-1. Set `NPM_TOKEN` secret in GitHub repo settings
-2. Create/push the v1.0.0 git tag: `git tag v1.0.0 && git push origin v1.0.0`
-3. The `.github/workflows/publish.yml` workflow triggers automatically and publishes to npm
-4. Create a GitHub Release from the tag
+v1.0.0 is PREPARED but not yet published. `publish.yml` triggers on a GitHub Release being **published**, not on a tag push — a pushed tag alone will not publish to npm. Owner workflow:
+1. Set the `NPM_TOKEN` secret in GitHub repo settings, and ensure the `@chainvault` npm scope/org exists (first `--access public` publish under a scope needs the org to exist)
+2. Create and push the v1.0.0 git tag: `git tag v1.0.0 && git push origin v1.0.0`
+3. Create the GitHub Release from that tag: `gh release create v1.0.0` — publishing this Release is what triggers `.github/workflows/publish.yml`
+4. Verify both packages appear on npm: `npm view @chainvault/core version`, `npm view chainvault-mcp version`
 
 ## Current Implementation State
 
@@ -21,7 +21,7 @@ v1.0.0 is PREPARED but not yet published. Owner workflow:
 - **API Proxy:** Caching (5-min TTL), per-second + daily rate limiting, usage tracking
 - **Audit:** AuditStore (SQLite `node:sqlite`), AuditLogger (file-based legacy), audit error status
 - **Database:** SQLite persistence for spend tracking + audit logs (migrated from `better-sqlite3`)
-- **MCP Server:** All 15 tools wired — zero stubs. RPC resolution from agent vault endpoints.
+- **MCP Server:** All 16 tools wired — zero stubs. RPC resolution from agent vault endpoints.
 
 ### Product Bug Fixes (Discovered & Fixed in Workstyle W0–W5)
 1. **Audit 'error' status** — Error handling for audit logs
@@ -36,8 +36,8 @@ v1.0.0 is PREPARED but not yet published. Owner workflow:
 ### Test Architecture (Vitest projects)
 | Project | Contents | CI Gate? | Runs | Command |
 |---------|----------|----------|------|---------|
-| `unit` | 397 mocked/offline tests (existing + workstyle W1–W5) | Yes (PR) | Always | `npx vitest run --project unit` |
-| `anvil` | 52 local anvil deterministic suites (W4–W5 lifecycle+edge) | Yes (PR) | Always | `npm run test:workstyle` |
+| `unit` | 415 mocked/offline tests (existing + workstyle W1–W5) | Yes (PR) | Always | `npx vitest run --project unit` |
+| `anvil` | 54 local anvil deterministic suites (W4–W5 lifecycle+edge) | Yes (PR) | Always | `npm run test:workstyle` |
 | `live` | Public-RPC read-only tests on real chains | No | Nightly | `npm run test` (default includes) |
 | `fork` | Real protocols (WETH, USDT, Uniswap) on mainnet fork | No | Nightly | `WORKSTYLE_FORK=1 npm run test:fork` |
 | `testnet` | Sepolia smoke test (optional; skips if no TESTNET_PRIVATE_KEY) | No | Nightly/Manual | `npm run test:testnet` |
@@ -50,11 +50,11 @@ v1.0.0 is PREPARED but not yet published. Owner workflow:
 - Both jobs required for merge
 
 ### Nightly Workflow (`nightly.yml`)
-- Cron schedule (UTC 02:00)
+- Cron schedule (UTC 03:00)
 - Manual trigger via `workflow_dispatch`
 - Runs `npm run test` (live), `npm run test:fork`, `npm run test:testnet`, `npm run test:scenarios`
 - On failure, opens/updates a tracking issue
-- Secrets: `FORK_RPC_URL` (optional, defaults to PublicNode), `TESTNET_PRIVATE_KEY` (optional but recommended), `ANTHROPIC_API_KEY` (required for scenarios), `ETHERSCAN_API_KEY` (optional)
+- Secrets: `FORK_RPC_URL` (optional, defaults to `eth.drpc.org` — PublicNode's free tier rejects pinned-block reads), `TESTNET_PRIVATE_KEY` (optional but recommended), `ANTHROPIC_API_KEY` (required for scenarios), `ETHERSCAN_API_KEY` (optional)
 
 ## Test Infrastructure Helpers
 
