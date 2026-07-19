@@ -28,19 +28,32 @@ See [`CLAUDE.md`](CLAUDE.md) for project-wide conventions and [`packages/core/CL
 
 ## Testing
 
-We use [vitest](https://vitest.dev/) with a TDD workflow.
+We use [vitest](https://vitest.dev/) with a TDD workflow and a tiered test architecture.
 
 - Test files live next to source: `foo.ts` -> `foo.test.ts`
-- Run a single test file: `npx vitest run path/to/file.test.ts`
-- Run all tests: `npx vitest run`
+- Run unit tests (PR gate): `npx vitest run --project unit`
+- Run all local tests (unit + anvil): `npx vitest run`
+- Run workstyle suites (needs anvil + solc): `npm run test:workstyle`
 - Watch mode: `npx vitest`
+
+**Test tiers:**
+
+| Tier | Command | Runs | Needs |
+|------|---------|------|-------|
+| `unit` | `npx vitest run --project unit` | Every PR | Nothing |
+| `anvil` | `npm run test:workstyle` | Every PR | Foundry (`anvil`, `cast`) |
+| `live` | `npm run test` (default) | Nightly | Network access |
+| `fork` | `WORKSTYLE_FORK=1 npm run test:fork` | Nightly | Mainnet fork RPC |
+| `testnet` | `npm run test:testnet` | Nightly | `TESTNET_PRIVATE_KEY` |
+| `scenarios` | `npm run test:scenarios` | Nightly | `ANTHROPIC_API_KEY` |
 
 **Rules:**
 
 - Write failing tests first, then implement
-- Mock external services (RPCs, APIs) -- tests must work offline
+- Mock external services (RPCs, APIs) -- unit tests must work offline
 - Test both success and failure paths, especially for security-related code
 - Use temp directories (`mkdtemp`) for vault/file tests, clean up in `afterEach`
+- Secrets must never appear in test output or logs (use `assertNoSecrets()` helper)
 
 ## Commit Conventions
 
@@ -61,11 +74,25 @@ test(chain): add EvmAdapter write operation tests
 docs: update README quick start section
 ```
 
+## CI Secrets (for Maintainers)
+
+The GitHub workflows use the following repository secrets for extended test tiers:
+
+| Secret | Used by | Purpose | Required? |
+|--------|---------|---------|-----------|
+| `FORK_RPC_URL` | `nightly.yml` fork tier | Mainnet RPC for `--fork-url` (defaults to PublicNode if not set) | Optional |
+| `TESTNET_PRIVATE_KEY` | `nightly.yml` testnet tier | Funded throwaway Sepolia key for live smoke tests. See [`docs/testnet-runbook.md`](docs/testnet-runbook.md) for provisioning. | Optional |
+| `ETHERSCAN_API_KEY` | `nightly.yml` testnet tier | Enables `verify_contract` and explorer tests. | Optional |
+| `ANTHROPIC_API_KEY` | `nightly.yml` scenarios | LLM-driven agent workflow end-to-end tests. | Optional (scenarios skip if not set) |
+| `NPM_TOKEN` | `.github/workflows/publish.yml` | Publishes v1.0.0 to npm when tag is pushed. See publish workflow for setup. | Required for release |
+
+The `unit` and `anvil` projects (PR gate) require **no secrets** and run offline.
+
 ## Pull Request Process
 
 1. Branch from `main` with a descriptive branch name (e.g., `feat/solana-adapter`, `fix/daily-limit-reset`)
 2. Make your changes following the conventions above
-3. Ensure all tests pass (`npx vitest run`) and types check (`npx tsc --noEmit`)
+3. Ensure PR-gate tests pass: `npm run build`, `npx vitest run --project unit`, `npm run test:workstyle`, `npx tsc --noEmit`
 4. Write a clear PR title and description. Link any related issues.
 5. Request review from a maintainer
 
