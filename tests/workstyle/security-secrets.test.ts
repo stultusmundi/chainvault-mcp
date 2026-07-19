@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import * as cryptoModule from '../../packages/core/src/vault/crypto.js';
 import { ChainVaultDB } from '../../packages/core/src/db/database.js';
+import { ChainVaultServer } from '../../packages/core/src/mcp/server.js';
 import { anvilAvailable, ANVIL_ACCOUNTS, ANVIL_CHAIN_ID } from './helpers/anvil.js';
 import { compileCorpusContract, compilerAvailable } from './helpers/corpus.js';
 import { startWorkstyleMcp, callToolText, type WorkstyleMcp } from './helpers/mcp.js';
 import { assertNoSecrets } from './helpers/secrets.js';
-import { FIXTURE_PASSWORD } from './helpers/vault-fixture.js';
+import { createVaultFixture, FIXTURE_PASSWORD } from './helpers/vault-fixture.js';
 
 vi.mock('../../packages/core/src/vault/crypto.js', async (importOriginal) => {
   const original = await importOriginal<typeof cryptoModule>();
@@ -101,5 +104,49 @@ describe.skipIf(!ready)('secret non-exposure and zero-decryption', () => {
     const rows = await auditRows();
     expect(rows.length).toBeGreaterThan(0);
     assertNoSecrets(rows, secrets);
+  });
+
+  it('redacts a credentialed RPC URL from tool responses and audit rows on a dead endpoint', async () => {
+    // Separate small fixture + session — deliberately NOT the shared `mcp`
+    // from beforeAll, so this doesn't disturb the anvil-backed suite above.
+    // viem embeds the full request URL (including any path-embedded provider
+    // API key) into HttpRequestError messages, so a vault RPC endpoint with a
+    // credential in its path must never reach an agent-visible tool response
+    // or an audit row.
+    const RPC_TOKEN = 'SUPERSECRETRPCTOKEN';
+    const deadRpcUrl = `http://127.0.0.1:9/v3/${RPC_TOKEN}`;
+
+    const fixture = await createVaultFixture({ rpcUrl: deadRpcUrl });
+    const server = new ChainVaultServer({
+      basePath: fixture.basePath,
+      vaultKey: fixture.vaultKeys['workstyle-agent'],
+    });
+    await server.init();
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'leak-test-client', version: '1.0.0' });
+    await server.getMcpServer().connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const text = await callToolText(client, 'get_balance', {
+        chain_id: ANVIL_CHAIN_ID,
+        address: ANVIL_ACCOUNTS[0].address,
+      });
+      assertNoSecrets(text, [RPC_TOKEN, deadRpcUrl]);
+
+      const db = new ChainVaultDB(fixture.basePath);
+      try {
+        const rows = db.getDB().prepare('SELECT * FROM audit_entries').all() as unknown[];
+        expect(rows.length).toBeGreaterThan(0);
+        assertNoSecrets(rows, [RPC_TOKEN, deadRpcUrl]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      await client.close();
+      await server.getMcpServer().close();
+      await fixture.cleanup();
+    }
   });
 });

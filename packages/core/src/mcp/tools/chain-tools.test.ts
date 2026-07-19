@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { registerChainTools } from './chain-tools.js';
+import { registerChainTools, sanitizeError } from './chain-tools.js';
 import type { AgentContext } from '../context.js';
 
 const writeContractMock = vi.fn(async () => ({ hash: '0xWriteTxHash' }));
@@ -128,5 +128,54 @@ describe('simulate_transaction value conversion', () => {
     expect(simulateTransactionMock).toHaveBeenCalledTimes(1);
     const callArgs = simulateTransactionMock.mock.calls[0][0];
     expect(callArgs.value).toBeUndefined();
+  });
+});
+
+describe('sanitizeError', () => {
+  it('redacts private keys and URLs (including embedded credentials) from error messages', () => {
+    const err = new Error(
+      'HTTP request failed.\n\nURL: https://mainnet.infura.io/v3/SECRETKEY123 something 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+    );
+    const sanitized = sanitizeError(err);
+    expect(sanitized).not.toContain('SECRETKEY123');
+    expect(sanitized).not.toContain('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+    expect(sanitized).toContain('https://[REDACTED]');
+    expect(sanitized).toContain('0x[REDACTED]');
+  });
+
+  it('redacts a bare (non-Error) string message the same way', () => {
+    const sanitized = sanitizeError('fetch failed for http://127.0.0.1:9/v3/SUPERSECRETRPCTOKEN');
+    expect(sanitized).not.toContain('SUPERSECRETRPCTOKEN');
+    expect(sanitized).toContain('https://[REDACTED]');
+  });
+});
+
+describe('simulate_transaction error sanitization', () => {
+  beforeEach(() => {
+    simulateTransactionMock.mockClear();
+  });
+
+  it('redacts a credentialed URL from a failed simulation result before returning it', async () => {
+    const server = createFakeServer();
+    const ctx = createApprovedContext();
+    registerChainTools(server as any, () => ctx);
+
+    simulateTransactionMock.mockResolvedValueOnce({
+      success: false,
+      error: 'HTTP request failed.\n\nURL: https://mainnet.infura.io/v3/SECRETKEY123\n\nDetails: fetch failed',
+    });
+
+    const handler = server.handlers.get('simulate_transaction')!;
+    const result = await handler({
+      chain_id: 11155111,
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      abi: '[]',
+      function_name: 'deposit',
+      args: [],
+    });
+
+    const text = result.content[0].text as string;
+    expect(text).not.toContain('SECRETKEY123');
+    expect(text).toContain('https://[REDACTED]');
   });
 });

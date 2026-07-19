@@ -11,11 +11,17 @@ const noop: AuditFn = () => {};
 
 /**
  * Strips potential key material from error messages before returning to agents.
- * Redacts anything that looks like a private key (0x + 64 hex chars).
+ * Redacts anything that looks like a private key (0x + 64 hex chars), then
+ * redacts any URL — viem embeds the full request URL (which for custom vault
+ * RPC endpoints can carry provider API keys, e.g. .../v3/<key>) into error
+ * messages such as HttpRequestError, and this must never reach an agent-visible
+ * tool response or an audit row.
  */
-function sanitizeError(err: unknown): string {
+export function sanitizeError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  return msg.replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]');
+  return msg
+    .replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]')
+    .replace(/https?:\/\/[^\s"')]+/g, 'https://[REDACTED]');
 }
 
 /**
@@ -342,6 +348,12 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
           // adapter (and the underlying viem call) needs wei.
           value: value ? parseEther(value).toString() : undefined,
         });
+        // The adapter surfaces raw err.message on simulation failure — this
+        // bypasses the catch-block sanitizeError() calls below, so sanitize
+        // it explicitly before it can reach the agent or the audit log.
+        if (!result.success && result.error) {
+          result.error = sanitizeError(result.error);
+        }
         audit({ action: 'simulate_transaction', chain_id, status: 'approved', details: `Simulated ${function_name}` });
         return { content: [{ type: 'text' as const, text: toJson(result) }] };
       } catch (e: unknown) {
