@@ -21,7 +21,7 @@ export function sanitizeError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   return msg
     .replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]')
-    .replace(/https?:\/\/[^\s"')]+/g, 'https://[REDACTED]');
+    .replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"')]+/gi, 'https://[REDACTED]');
 }
 
 /**

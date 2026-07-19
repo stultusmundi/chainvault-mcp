@@ -148,6 +148,16 @@ describe('sanitizeError', () => {
     expect(sanitized).not.toContain('SUPERSECRETRPCTOKEN');
     expect(sanitized).toContain('https://[REDACTED]');
   });
+
+  it('redacts non-http schemes like wss:// from error messages', () => {
+    const err = new Error(
+      'WebSocket connection failed: wss://rpc.example.com/ws/WSSECRETTOKEN error details',
+    );
+    const sanitized = sanitizeError(err);
+    expect(sanitized).not.toContain('WSSECRETTOKEN');
+    expect(sanitized).not.toContain('wss://rpc.example.com');
+    expect(sanitized).toContain('[REDACTED]');
+  });
 });
 
 describe('simulate_transaction error sanitization', () => {
