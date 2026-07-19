@@ -1,9 +1,9 @@
 # Session Handoff — 2026-07-19
 
-## Status: v1.0.0 Released
+## Status: v1.0.0 Prepared (not yet merged or published)
 
-**Branch:** `main` (merged from `feat/workstyle-testing`)
-**Version:** 1.0.0 (published to npm, **requires owner to set NPM_TOKEN + create GitHub release via .github/workflows/publish.yml**)
+**Branch:** `feat/workstyle-testing` (draft PR #23 into `main`, pending final review + merge)
+**Version:** 1.0.0 (will be published to npm once the owner sets NPM_TOKEN and creates the GitHub release via .github/workflows/publish.yml)
 **Tests:** 449 total (397 unit + 52 anvil) on every PR; nightly adds live/fork/testnet/scenarios
 
 v1.0.0 is PREPARED but not yet published. Owner workflow:
