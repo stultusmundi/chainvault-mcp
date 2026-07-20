@@ -28,7 +28,7 @@ export class ChainVaultServer {
     this.mcpServer = new McpServer(
       {
         name: 'chainvault-mcp',
-        version: '1.0.0',
+        version: '1.0.1',
       },
       {
         capabilities: { logging: {} },

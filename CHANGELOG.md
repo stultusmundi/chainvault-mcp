@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 — 2026-07-20
+
+- **Packaging:** CLI published as `@chainvault/mcp` (scoped; was `chainvault-mcp`).
+  The installed command is unchanged: `chainvault`.
+- **Packaging:** normalized the `bin` path so npm no longer warns at publish.
+- **CI:** releases publish via npm Trusted Publishing (OIDC) — no token secrets.
+
 ## 1.0.0 — 2026-07-18
 
 First stable release.
