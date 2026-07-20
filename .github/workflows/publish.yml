@@ -1,4 +1,5 @@
-# NPM_TOKEN and the @chainvault npm scope must exist before the first release
+# Publishes via npm Trusted Publishing (OIDC) — no NPM_TOKEN secret needed.
+# Both packages must list this repo + workflow as a Trusted Publisher on npmjs.com.
 name: Publish
 
 on:
@@ -7,7 +8,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # npm provenance
+  id-token: write   # OIDC token exchange with npm + provenance
 
 jobs:
   publish:
@@ -18,7 +19,8 @@ jobs:
         with:
           node-version: '22.x'
           cache: npm
-          registry-url: 'https://registry.npmjs.org'
+      # Node 22 bundles npm 10; trusted publishing needs npm >= 11.5
+      - run: npm install -g npm@11
       - run: npm ci
       - run: npm run build
       - run: npx vitest run --project unit
@@ -32,8 +34,6 @@ jobs:
           else
             npm publish -w @chainvault/core --provenance --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish @chainvault/mcp
         run: |
           VERSION=$(node -p "require('./packages/cli/package.json').version")
@@ -42,5 +42,3 @@ jobs:
           else
             npm publish -w @chainvault/mcp --provenance --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
