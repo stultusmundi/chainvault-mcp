@@ -29,6 +29,13 @@ describe('sanitizeError (shared)', () => {
     expect(sanitizeError('at wss://node.example.com/ws/WSTOKEN')).not.toContain('WSTOKEN');
   });
 
+  it('redacts private keys even when contiguous with more hex (no delimiter)', () => {
+    const out = sanitizeError(`leak ${PRIV}${PRIV}`); // 128 contiguous hex, no 0x
+    expect(out).not.toContain(PRIV);
+    const out2 = sanitizeError(`sig 0x${PRIV}${PRIV}aa`); // 0x + 130 hex
+    expect(out2).not.toContain(PRIV);
+  });
+
   it('does not redact a public 40-hex address', () => {
     const out = sanitizeError(new Error(`revert from ${PUBLIC_ADDRESS}`));
     expect(out).toContain(PUBLIC_ADDRESS);
