@@ -51,6 +51,25 @@ describe('RulesEngine', () => {
       expect(result.approved).toBe(true);
     });
 
+    it('denies non-numeric, NaN, Infinity, and negative values (no limit bypass)', () => {
+      const engine = new RulesEngine(DEPLOYER_CONFIG);
+      for (const value of ['NaN', 'abc', 'Infinity', '-Infinity', '-1', '-0.5', '']) {
+        const result = engine.checkTxRequest({ type: 'write', chain_id: 11155111, value });
+        expect(result.approved, `value ${JSON.stringify(value)} must be denied`).toBe(false);
+      }
+    });
+
+    it('denies a non-numeric value even when no limits are configured', () => {
+      // READER can only read/simulate; use a config with a spend-incurring type but no limits.
+      const noLimits: AgentConfig = {
+        ...DEPLOYER_CONFIG,
+        tx_rules: { allowed_types: ['deploy', 'write', 'read', 'simulate'], limits: {} },
+      };
+      const engine = new RulesEngine(noLimits);
+      const result = engine.checkTxRequest({ type: 'write', chain_id: 11155111, value: 'NaN' });
+      expect(result.approved).toBe(false);
+    });
+
     it('denies request for unauthorized chain', () => {
       const engine = new RulesEngine(DEPLOYER_CONFIG);
       const result = engine.checkTxRequest({

@@ -59,7 +59,14 @@ export class RulesEngine {
 
     // 4. Check spend limits (skip for read/simulate)
     if (request.type !== 'read' && request.type !== 'simulate') {
-      const limitResult = this.checkSpendLimits(request.chain_id, parseFloat(request.value));
+      // Reject non-numeric / NaN / Infinity / negative values before any
+      // comparison. Otherwise NaN makes every `>` check false and silently
+      // bypasses all spend limits (the control that runs before decryption).
+      const value = parseFloat(request.value);
+      if (!Number.isFinite(value) || value < 0) {
+        return { approved: false, reason: `Invalid transaction value: ${JSON.stringify(request.value)}` };
+      }
+      const limitResult = this.checkSpendLimits(request.chain_id, value);
       if (!limitResult.approved) return limitResult;
     }
 
