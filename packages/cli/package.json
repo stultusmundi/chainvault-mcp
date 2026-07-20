@@ -1,10 +1,13 @@
 {
-  "name": "chainvault-mcp",
+  "name": "@chainvault/mcp",
   "version": "1.0.0",
   "description": "ChainVault MCP CLI and TUI",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
-    "chainvault": "./dist/index.js"
+    "chainvault": "dist/index.js"
   },
   "main": "./dist/index.js",
   "files": [

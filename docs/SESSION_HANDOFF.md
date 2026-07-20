@@ -10,7 +10,7 @@ v1.0.0 is PREPARED but not yet published. `publish.yml` triggers on a GitHub Rel
 1. Set the `NPM_TOKEN` secret in GitHub repo settings, and ensure the `@chainvault` npm scope/org exists (first `--access public` publish under a scope needs the org to exist)
 2. Create and push the v1.0.0 git tag: `git tag v1.0.0 && git push origin v1.0.0`
 3. Create the GitHub Release from that tag: `gh release create v1.0.0` — publishing this Release is what triggers `.github/workflows/publish.yml`
-4. Verify both packages appear on npm: `npm view @chainvault/core version`, `npm view chainvault-mcp version`
+4. Verify both packages appear on npm: `npm view @chainvault/core version`, `npm view @chainvault/mcp version`
 
 ## Current Implementation State
 

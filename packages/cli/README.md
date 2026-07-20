@@ -1,4 +1,4 @@
-# chainvault-mcp
+# @chainvault/mcp
 
 Interactive TUI and CLI for administering ChainVault MCP: manage vaults,
 keys, agents, API services, and audit logs, and run `chainvault serve` to
