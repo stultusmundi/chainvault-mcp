@@ -156,6 +156,20 @@ describe('resolveCompiler', () => {
   });
 });
 
+describe('resolveCompiler version validation', () => {
+  it('rejects a non-semver version before touching docker or solc', async () => {
+    for (const bad of ['latest', '-v', '0.8', '0.8.x', '0.8.24; rm -rf /', 'ethereum/solc@sha256:abcd', ' 0.8.24']) {
+      await expect(resolveCompiler(bad)).rejects.toThrow(/invalid solc version/i);
+    }
+  });
+
+  it('accepts a well-formed semver version', async () => {
+    mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' }); // docker info
+    const method = await resolveCompiler('0.8.24');
+    expect(method).toEqual({ type: 'docker', version: '0.8.24' });
+  });
+});
+
 describe('compile', () => {
   beforeEach(() => {
     mockExecFile.mockReset();

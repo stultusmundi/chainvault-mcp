@@ -67,6 +67,17 @@ export interface CompilerMethod {
   version: string;
 }
 
+// solc version flows into a Docker image tag (`ethereum/solc:<version>`) and a
+// solc CLI comparison. Require strict semver so it can't inject docker flags,
+// alternate tags, or `@sha256:` digests that redirect which image runs.
+const SOLC_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+
+export function assertValidSolcVersion(version: string): void {
+  if (!SOLC_VERSION_PATTERN.test(version)) {
+    throw new Error(`Invalid solc version: ${JSON.stringify(version)} (expected e.g. "0.8.24")`);
+  }
+}
+
 export function buildStandardInput(
   source: string,
   optimization: boolean = false,
@@ -129,6 +140,7 @@ export function parseOutput(rawOutput: string, contractName: string): CompileRes
 }
 
 export async function resolveCompiler(version: string): Promise<CompilerMethod> {
+  assertValidSolcVersion(version);
   // Try docker first (with timeout to avoid hanging when Docker Desktop is installed but not running)
   try {
     await execFileAsync('docker', ['info'], { timeout: 5000 });

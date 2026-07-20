@@ -1,9 +1,11 @@
 import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
+import { assertValidSolcVersion } from '@chainvault/core';
 
 const execFileAsync = promisify(execFileCb);
 
 export async function pullSolc(version: string = '0.8.20'): Promise<string> {
+  assertValidSolcVersion(version);
   const image = `ethereum/solc:${version}`;
   console.log(`Pulling Docker image: ${image}...`);
 
