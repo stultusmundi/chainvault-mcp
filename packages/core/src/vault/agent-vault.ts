@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { encrypt, decrypt, generateVaultKeyString, wipeBuffer } from './crypto.js';
-import { AgentVaultDataSchema, type AgentVaultData, type AgentConfig } from './types.js';
+import { AGENT_NAME_PATTERN, AgentVaultDataSchema, type AgentVaultData, type AgentConfig } from './types.js';
 import type { MasterVault } from './master-vault.js';
 
 const AGENTS_DIR = 'agents';
@@ -15,11 +15,25 @@ export class AgentVaultManager {
     this.masterVault = masterVault;
   }
 
+  /**
+   * Validates an agent name and returns its vault file path. Callers pass the
+   * name straight in (bypassing schema validation), so this is the enforcement
+   * point that prevents path traversal (arbitrary read/write/delete).
+   */
+  private vaultPathFor(agentName: string): string {
+    if (!AGENT_NAME_PATTERN.test(agentName)) {
+      throw new Error(`Invalid agent name: ${JSON.stringify(agentName)}`);
+    }
+    return join(this.basePath, AGENTS_DIR, `${agentName}.vault`);
+  }
+
   async createAgent(
     config: AgentConfig,
     grantedKeys: string[],
     grantedApiKeys: string[],
   ): Promise<{ vaultKey: string }> {
+    // Validate the name before any state mutation or disk write.
+    const vaultPath = this.vaultPathFor(config.name);
     const masterData = this.masterVault.getData();
 
     // Store agent config in master vault
@@ -62,9 +76,8 @@ export class AgentVaultManager {
     const { keyString, keyBuffer } = generateVaultKeyString();
     const encrypted = encrypt(JSON.stringify(agentVaultData), keyBuffer);
 
-    const agentsDir = join(this.basePath, AGENTS_DIR);
-    await mkdir(agentsDir, { recursive: true });
-    await writeFile(join(agentsDir, `${config.name}.vault`), encrypted, 'utf8');
+    await mkdir(join(this.basePath, AGENTS_DIR), { recursive: true });
+    await writeFile(vaultPath, encrypted, 'utf8');
     wipeBuffer(keyBuffer);
 
     return { vaultKey: keyString };
@@ -74,13 +87,11 @@ export class AgentVaultManager {
     agentName: string,
     vaultKey: string,
   ): Promise<AgentVaultData> {
+    const vaultPath = this.vaultPathFor(agentName);
     const hexPart = vaultKey.replace('cv_agent_', '');
     const keyBuffer = Buffer.from(hexPart, 'hex');
 
-    const encrypted = await readFile(
-      join(this.basePath, AGENTS_DIR, `${agentName}.vault`),
-      'utf8',
-    );
+    const encrypted = await readFile(vaultPath, 'utf8');
     const decrypted = decrypt(encrypted, keyBuffer);
     wipeBuffer(keyBuffer);
     return AgentVaultDataSchema.parse(JSON.parse(decrypted));
@@ -97,11 +108,7 @@ export class AgentVaultManager {
     const { keyString, keyBuffer } = generateVaultKeyString();
     const encrypted = encrypt(JSON.stringify(agentData), keyBuffer);
 
-    await writeFile(
-      join(this.basePath, AGENTS_DIR, `${agentName}.vault`),
-      encrypted,
-      'utf8',
-    );
+    await writeFile(this.vaultPathFor(agentName), encrypted, 'utf8');
     wipeBuffer(keyBuffer);
 
     return { vaultKey: keyString };
@@ -150,13 +157,13 @@ export class AgentVaultManager {
     const encrypted = encrypt(JSON.stringify(agentVaultData), keyBuffer);
     wipeBuffer(keyBuffer);
 
-    await writeFile(join(this.basePath, AGENTS_DIR, `${agentName}.vault`), encrypted, 'utf8');
+    await writeFile(this.vaultPathFor(agentName), encrypted, 'utf8');
 
     return { vaultKey: keyString };
   }
 
   async revokeAgent(agentName: string): Promise<void> {
-    const vaultPath = join(this.basePath, AGENTS_DIR, `${agentName}.vault`);
+    const vaultPath = this.vaultPathFor(agentName);
     await rm(vaultPath, { force: true });
 
     const masterData = this.masterVault.getData();

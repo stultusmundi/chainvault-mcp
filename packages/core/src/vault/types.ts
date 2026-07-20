@@ -40,8 +40,12 @@ const ContractRulesSchema = z.discriminatedUnion('mode', [
 
 // --- Agent Config ---
 
+// Agent names are used to build vault filenames (`<name>.vault`), so they must
+// not contain path separators or traversal sequences. Restrict to a safe set.
+export const AGENT_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
 export const AgentConfigSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).regex(AGENT_NAME_PATTERN),
   chains: z.array(z.number().int()),
   tx_rules: TxRulesSchema,
   api_access: z.record(z.string(), ApiAccessRuleSchema),
@@ -86,7 +90,7 @@ export type MasterVaultData = z.infer<typeof MasterVaultDataSchema>;
 
 export const AgentVaultDataSchema = z.object({
   version: z.literal(1),
-  agent_name: z.string(),
+  agent_name: z.string().min(1).regex(AGENT_NAME_PATTERN),
   config: AgentConfigSchema,
   keys: z.record(z.string(), StoredKeySchema),
   api_keys: z.record(z.string(), StoredApiKeySchema),

@@ -150,6 +150,48 @@ describe('AgentVaultManager', () => {
     });
   });
 
+  describe('path traversal protection', () => {
+    // Match the guard's error specifically, so these fail on ENOENT/decrypt
+    // errors and only pass once name validation actually fires.
+    const INVALID = /invalid agent name/i;
+    const EVIL = '../../evil-agent';
+    const DUMMY_KEY = 'cv_agent_' + '0'.repeat(64);
+
+    it('createAgent rejects a config name with path separators', async () => {
+      const manager = new AgentVaultManager(testDir, masterVault);
+      const evilConfig: AgentConfig = { ...DEPLOYER_CONFIG, name: EVIL };
+      await expect(manager.createAgent(evilConfig, [], [])).rejects.toThrow(INVALID);
+    });
+
+    it('openAgentVault rejects a traversing agent name', async () => {
+      const manager = new AgentVaultManager(testDir, masterVault);
+      await expect(manager.openAgentVault(EVIL, DUMMY_KEY)).rejects.toThrow(INVALID);
+    });
+
+    it('revokeAgent rejects a traversing name and performs no arbitrary delete', async () => {
+      const manager = new AgentVaultManager(testDir, masterVault);
+      // Plant a file at the traversal target; revoke must not delete it.
+      const { writeFile } = await import('node:fs/promises');
+      const { existsSync } = await import('node:fs');
+      const victim = join(testDir, 'victim.vault');
+      await writeFile(victim, 'precious', 'utf8');
+      await expect(manager.revokeAgent('../victim')).rejects.toThrow(INVALID);
+      expect(existsSync(victim)).toBe(true);
+    });
+
+    it('rotateAgentKey rejects a traversing agent name', async () => {
+      const manager = new AgentVaultManager(testDir, masterVault);
+      await expect(manager.rotateAgentKey(EVIL, DUMMY_KEY)).rejects.toThrow(INVALID);
+    });
+
+    it('regenerateAgent rejects a traversing agent name', async () => {
+      const manager = new AgentVaultManager(testDir, masterVault);
+      await expect(
+        manager.regenerateAgent(EVIL, DUMMY_KEY, [], []),
+      ).rejects.toThrow(INVALID);
+    });
+  });
+
   describe('listAgents', () => {
     it('lists all agents with summaries', async () => {
       const manager = new AgentVaultManager(testDir, masterVault);
