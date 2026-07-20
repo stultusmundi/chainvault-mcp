@@ -5,24 +5,14 @@ import { EvmAdapter } from '../../chain/evm-adapter.js';
 import { getChainConfig } from '../../chain/chains.js';
 import type { AgentContext } from '../context.js';
 import type { AuditFn } from '../audit-fn.js';
+import { sanitizeError } from './sanitize.js';
 
 type ContextGetter = () => AgentContext | null;
 const noop: AuditFn = () => {};
 
-/**
- * Strips potential key material from error messages before returning to agents.
- * Redacts anything that looks like a private key (0x + 64 hex chars), then
- * redacts any URL — viem embeds the full request URL (which for custom vault
- * RPC endpoints can carry provider API keys, e.g. .../v3/<key>) into error
- * messages such as HttpRequestError, and this must never reach an agent-visible
- * tool response or an audit row.
- */
-export function sanitizeError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg
-    .replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]')
-    .replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"')]+/gi, 'https://[REDACTED]');
-}
+// Re-exported for tests and older importers; the implementation is shared so
+// the redaction rules never drift between tool files.
+export { sanitizeError };
 
 /**
  * JSON.stringify cannot serialize bigint, but viem returns raw bigint values
