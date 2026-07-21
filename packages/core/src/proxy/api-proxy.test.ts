@@ -156,6 +156,7 @@ describe('ApiProxy', () => {
 
     await expect(
       proxy.request({
+        agentId: 'test-agent',
         baseUrl: 'https://api.etherscan.io',
         endpoint: '/api',
         params: {},
@@ -171,6 +172,7 @@ describe('ApiProxy', () => {
 
     await expect(
       proxy.request({
+        agentId: 'test-agent',
         baseUrl: 'https://api.etherscan.io',
         endpoint: '/api',
         params: {},
@@ -189,6 +191,7 @@ describe('ApiProxy', () => {
 
     await expect(
       proxy.request({
+        agentId: 'test-agent',
         baseUrl: 'https://api.etherscan.io',
         endpoint: '/api',
         params: {},
