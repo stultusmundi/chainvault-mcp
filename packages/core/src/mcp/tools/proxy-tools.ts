@@ -59,6 +59,7 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
 
       try {
         const result = await proxy.request({
+          agentId: ctx.agentName,
           baseUrl: explorerApiUrl,
           endpoint: '/api',
           params: { module: mod, action, ...(extraParams ?? {}) },
