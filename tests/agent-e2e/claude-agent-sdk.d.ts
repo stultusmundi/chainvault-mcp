@@ -62,10 +62,24 @@ declare module '@anthropic-ai/claude-agent-sdk' {
     model: string;
   }
 
-  export type SDKMessage = SDKAssistantMessage | SDKResultMessage | SDKSystemMessage | {
-    type: string;
+  /**
+   * Other message kinds the e2e scripts iterate past but never inspect (user
+   * turns, streaming deltas, ...). The `type` is a constrained set of literals
+   * — NOT an open `type: string` — so `message.type === 'assistant'` still
+   * narrows to SDKAssistantMessage instead of also matching this member.
+   */
+  export interface SDKOtherMessage {
+    type: 'user' | 'stream_event' | 'partial_assistant';
+    uuid?: string;
+    session_id?: string;
     [key: string]: unknown;
-  };
+  }
+
+  export type SDKMessage =
+    | SDKAssistantMessage
+    | SDKResultMessage
+    | SDKSystemMessage
+    | SDKOtherMessage;
 
   export interface Query extends AsyncGenerator<SDKMessage, void> {
     abort(): void;
