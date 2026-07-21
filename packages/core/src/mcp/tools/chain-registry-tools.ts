@@ -60,10 +60,11 @@ export function registerChainRegistryTools(server: McpServer, getContext: Contex
         audit({ action: 'request_faucet', chain_id, status: 'denied', details: 'No agent context' });
         return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
       }
-      // The agent must have access to this chain (mirrors read gating).
-      const access = ctx.rules.checkTxRequest({ type: 'read', chain_id, value: '0' });
-      if (!access.approved) {
-        const reason = access.reason ?? `Agent does not have access to chain ${chain_id}.`;
+      // The agent must own this chain. Gate on chain membership directly rather
+      // than a tx-type check, so a deployer without 'read' in allowed_types can
+      // still fund a testnet it legitimately has access to.
+      if (!ctx.config.chains.includes(chain_id)) {
+        const reason = `Agent does not have access to chain ${chain_id}.`;
         audit({ action: 'request_faucet', chain_id, status: 'denied', details: reason });
         return { content: [{ type: 'text' as const, text: reason }] };
       }

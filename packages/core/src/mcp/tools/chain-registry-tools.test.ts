@@ -27,13 +27,15 @@ function createFakeServer() {
   } as any;
 }
 
-// Agent with access to chain 11155111 only.
-function createContext(): AgentContext {
+// Agent that owns chain 11155111. `rules.checkTxRequest` deliberately denies
+// everything, so a passing faucet request proves the gate uses chain ownership
+// (config.chains), not tx-type permission.
+function createContext(chains: number[] = [11155111]): AgentContext {
   return {
     agentName: 'faucet-agent',
-    config: {} as AgentContext['config'],
+    config: { chains } as unknown as AgentContext['config'],
     rules: {
-      checkTxRequest: ({ chain_id }: { chain_id: number }) => ({ approved: chain_id === 11155111 }),
+      checkTxRequest: () => ({ approved: false, reason: "Transaction type 'read' is not allowed" }),
       recordSpend: vi.fn(),
     } as unknown as AgentContext['rules'],
     keys: [],
@@ -74,7 +76,7 @@ describe('request_faucet access control', () => {
     const server = createFakeServer();
     const audit = vi.fn();
     registerChainRegistryTools(server, () => createContext(), audit);
-    for (const bad of ['not-an-address', '0x123', '0xZZZ', VALID_ADDRESS + 'ff']) {
+    for (const bad of ['not-an-address', '0x123', '0xZZZ', VALID_ADDRESS + 'ff', VALID_ADDRESS + '\n', '\n' + VALID_ADDRESS]) {
       requestFaucetMock.mockClear();
       const res = await server.handlers.get('request_faucet')({ chain_id: 11155111, address: bad });
       expect(res.content[0].text, `address ${bad}`).toMatch(/invalid.*address/i);
@@ -82,10 +84,11 @@ describe('request_faucet access control', () => {
     }
   });
 
-  it('approves a valid request on an accessible chain', async () => {
+  it('approves a valid request on an owned chain regardless of tx-type permissions', async () => {
     const server = createFakeServer();
     const audit = vi.fn();
-    registerChainRegistryTools(server, () => createContext(), audit);
+    // Context owns 11155111 but rules.checkTxRequest denies everything.
+    registerChainRegistryTools(server, () => createContext([11155111]), audit);
     const res = await server.handlers.get('request_faucet')({ chain_id: 11155111, address: VALID_ADDRESS });
     expect(requestFaucetMock).toHaveBeenCalledWith(11155111, VALID_ADDRESS);
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ status: 'approved' }));
