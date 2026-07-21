@@ -49,7 +49,7 @@ export { AuditStore } from './db/audit-store.js';
 export type { AuditEntry } from './db/audit-store.js';
 
 // Compiler
-export { compile, buildStandardInput, parseOutput, resolveCompiler } from './compiler/solidity.js';
+export { compile, buildStandardInput, parseOutput, resolveCompiler, assertValidSolcVersion } from './compiler/solidity.js';
 export type { CompileResult, CompilerMethod } from './compiler/solidity.js';
 
 // Auth / WebAuthn

@@ -4,20 +4,12 @@ import type { AgentContext } from '../context.js';
 import type { AuditFn } from '../audit-fn.js';
 import { getChainConfig } from '../../chain/chains.js';
 import { ApiProxy } from '../../proxy/api-proxy.js';
+import { sanitizeError } from './sanitize.js';
 
 type ContextGetter = () => AgentContext | null;
 
 const proxy = new ApiProxy();
 const noop: AuditFn = () => {};
-
-/**
- * Strips potential key material from error messages before returning to agents.
- * Redacts anything that looks like a private key (0x + 64 hex chars).
- */
-function sanitizeError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.replace(/0x[a-fA-F0-9]{64}/g, '0x[REDACTED]');
-}
 
 export function registerProxyTools(server: McpServer, getContext: ContextGetter, audit: AuditFn = noop): void {
   server.registerTool(

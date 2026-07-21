@@ -90,6 +90,52 @@ describe('AgentConfigSchema', () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it('accepts names with safe filesystem characters', () => {
+    for (const name of ['deployer', 'agent_1', 'read-only', 'A9']) {
+      const result = AgentConfigSchema.safeParse({
+        name,
+        chains: [1],
+        tx_rules: { allowed_types: ['read'], limits: {} },
+        api_access: {},
+        contract_rules: { mode: 'none' },
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it('rejects names containing path separators or traversal sequences', () => {
+    for (const name of ['../evil', '../../etc/passwd', 'a/b', 'a\\b', 'foo.vault', 'has space', '.', '']) {
+      const result = AgentConfigSchema.safeParse({
+        name,
+        chains: [1],
+        tx_rules: { allowed_types: ['read'], limits: {} },
+        api_access: {},
+        contract_rules: { mode: 'none' },
+      });
+      expect(result.success, `name ${JSON.stringify(name)} should be rejected`).toBe(false);
+    }
+  });
+});
+
+describe('AgentVaultDataSchema', () => {
+  it('rejects an agent_name containing path traversal', () => {
+    const result = AgentVaultDataSchema.safeParse({
+      version: 1,
+      agent_name: '../../evil',
+      config: {
+        name: 'deployer',
+        chains: [1],
+        tx_rules: { allowed_types: ['read'], limits: {} },
+        api_access: {},
+        contract_rules: { mode: 'none' },
+      },
+      keys: {},
+      api_keys: {},
+      rpc_endpoints: {},
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('MasterVaultDataSchema', () => {
