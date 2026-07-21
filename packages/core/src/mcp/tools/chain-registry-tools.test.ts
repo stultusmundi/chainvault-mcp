@@ -1,0 +1,97 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const { requestFaucetMock } = vi.hoisted(() => ({
+  requestFaucetMock: vi.fn(async () => ({
+    success: true,
+    message: 'Faucet request sent',
+    chainId: 11155111,
+    chainName: 'Sepolia',
+  })),
+}));
+
+vi.mock('../../chain/faucet.js', () => ({
+  requestFaucet: requestFaucetMock,
+  getFaucetInfo: vi.fn(),
+}));
+
+import { registerChainRegistryTools } from './chain-registry-tools.js';
+import type { AgentContext } from '../context.js';
+
+function createFakeServer() {
+  const handlers = new Map<string, (args: any) => Promise<any>>();
+  return {
+    handlers,
+    registerTool: (name: string, _config: unknown, handler: (args: any) => Promise<any>) => {
+      handlers.set(name, handler);
+    },
+  } as any;
+}
+
+// Agent that owns chain 11155111. `rules.checkTxRequest` deliberately denies
+// everything, so a passing faucet request proves the gate uses chain ownership
+// (config.chains), not tx-type permission.
+function createContext(chains: number[] = [11155111]): AgentContext {
+  return {
+    agentName: 'faucet-agent',
+    config: { chains } as unknown as AgentContext['config'],
+    rules: {
+      checkTxRequest: () => ({ approved: false, reason: "Transaction type 'read' is not allowed" }),
+      recordSpend: vi.fn(),
+    } as unknown as AgentContext['rules'],
+    keys: [],
+    getPrivateKeyForChain: () => null,
+    getApiKey: () => null,
+    getApiKeyForExplorer: () => null,
+    getRpcUrlForChain: () => null,
+  };
+}
+
+const VALID_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
+
+describe('request_faucet access control', () => {
+  beforeEach(() => {
+    requestFaucetMock.mockClear();
+  });
+
+  it('denies when there is no agent context', async () => {
+    const server = createFakeServer();
+    const audit = vi.fn();
+    registerChainRegistryTools(server, () => null, audit);
+    const res = await server.handlers.get('request_faucet')({ chain_id: 11155111, address: VALID_ADDRESS });
+    expect(res.content[0].text).toMatch(/no agent context/i);
+    expect(requestFaucetMock).not.toHaveBeenCalled();
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ status: 'denied' }));
+  });
+
+  it('denies a chain the agent cannot access', async () => {
+    const server = createFakeServer();
+    const audit = vi.fn();
+    registerChainRegistryTools(server, () => createContext(), audit);
+    const res = await server.handlers.get('request_faucet')({ chain_id: 80002, address: VALID_ADDRESS });
+    expect(requestFaucetMock).not.toHaveBeenCalled();
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ status: 'denied' }));
+  });
+
+  it('denies a malformed recipient address', async () => {
+    const server = createFakeServer();
+    const audit = vi.fn();
+    registerChainRegistryTools(server, () => createContext(), audit);
+    for (const bad of ['not-an-address', '0x123', '0xZZZ', VALID_ADDRESS + 'ff', VALID_ADDRESS + '\n', '\n' + VALID_ADDRESS]) {
+      requestFaucetMock.mockClear();
+      const res = await server.handlers.get('request_faucet')({ chain_id: 11155111, address: bad });
+      expect(res.content[0].text, `address ${bad}`).toMatch(/invalid.*address/i);
+      expect(requestFaucetMock).not.toHaveBeenCalled();
+    }
+  });
+
+  it('approves a valid request on an owned chain regardless of tx-type permissions', async () => {
+    const server = createFakeServer();
+    const audit = vi.fn();
+    // Context owns 11155111 but rules.checkTxRequest denies everything.
+    registerChainRegistryTools(server, () => createContext([11155111]), audit);
+    const res = await server.handlers.get('request_faucet')({ chain_id: 11155111, address: VALID_ADDRESS });
+    expect(requestFaucetMock).toHaveBeenCalledWith(11155111, VALID_ADDRESS);
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ status: 'approved' }));
+    expect(res.content[0].text).toContain('Faucet request sent');
+  });
+});

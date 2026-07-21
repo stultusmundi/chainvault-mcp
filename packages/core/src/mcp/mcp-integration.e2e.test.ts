@@ -199,39 +199,17 @@ describe('MCP Server Integration (in-process via InMemoryTransport)', () => {
   describe('request_faucet tool', () => {
     const TEST_ADDRESS = '0x1234567890abcdef1234567890abcdef12345678';
 
-    it('returns result with correct chainId for a testnet chain', async () => {
+    // request_faucet now requires an agent context + chain access. The
+    // testnet/mainnet/unknown-chain faucet logic is covered in
+    // chain/faucet.test.ts; the gated tool with an approved context is covered
+    // in mcp/tools/chain-registry-tools.test.ts.
+    it('is denied without an agent context', async () => {
       const result = await client.callTool({
         name: 'request_faucet',
         arguments: { chain_id: 11155111, address: TEST_ADDRESS },
       });
-      const content = result.content as Array<{ type: string; text: string }>;
-      const parsed = JSON.parse(content[0].text);
-
-      expect(parsed.chainId).toBe(11155111);
-      expect(parsed.chainName).toBe('Sepolia');
-    });
-
-    it('returns success=false for a mainnet chain', async () => {
-      const result = await client.callTool({
-        name: 'request_faucet',
-        arguments: { chain_id: 1, address: TEST_ADDRESS },
-      });
-      const content = result.content as Array<{ type: string; text: string }>;
-      const parsed = JSON.parse(content[0].text);
-
-      expect(parsed.success).toBe(false);
-      expect(parsed.message.toLowerCase()).toContain('mainnet');
-    });
-
-    it('returns success=false for an unknown chain', async () => {
-      const result = await client.callTool({
-        name: 'request_faucet',
-        arguments: { chain_id: 999999, address: TEST_ADDRESS },
-      });
-      const content = result.content as Array<{ type: string; text: string }>;
-      const parsed = JSON.parse(content[0].text);
-
-      expect(parsed.success).toBe(false);
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      expect(text).toContain('CHAINVAULT_VAULT_KEY');
     });
   });
 
@@ -576,21 +554,15 @@ describe('MCP Server Integration (in-process via InMemoryTransport)', () => {
         expect(text).toContain('CHAINVAULT_VAULT_KEY');
       });
 
-      it('query_price returns data from CoinGecko public API', async () => {
+      // query_price now requires an agent context. The context-present fetch
+      // path is covered (mocked) in mcp/tools/proxy-tools.test.ts.
+      it('query_price is denied without an agent context', async () => {
         const result = await client.callTool({
           name: 'query_price',
           arguments: { token_id: 'ethereum' },
         });
         const text = (result.content as any)[0].text;
-        const parsed = JSON.parse(text);
-        // CoinGecko returns { ethereum: { usd: 1234.56 } } or rate limit error
-        if (parsed.error) {
-          // Rate limited — still valid behavior
-          expect(parsed.error).toBeDefined();
-        } else {
-          expect(parsed.ethereum).toBeDefined();
-          expect(typeof parsed.ethereum.usd).toBe('number');
-        }
+        expect(text).toContain('CHAINVAULT_VAULT_KEY');
       });
     });
   });

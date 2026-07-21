@@ -78,7 +78,7 @@ export class ChainVaultServer {
     registerChainTools(this.mcpServer, getContext, audit);
     registerProxyTools(this.mcpServer, getContext, audit);
     registerCompilerTools(this.mcpServer, audit);
-    registerChainRegistryTools(this.mcpServer, audit);
+    registerChainRegistryTools(this.mcpServer, getContext, audit);
 
     // Restore original
     this.mcpServer.registerTool = originalRegister;

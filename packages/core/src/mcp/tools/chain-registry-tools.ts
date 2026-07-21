@@ -1,12 +1,15 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AuditFn } from '../audit-fn.js';
+import type { AgentContext } from '../context.js';
 import { SUPPORTED_CHAINS, getChainConfig, getChainsWithFaucets } from '../../chain/chains.js';
 import { requestFaucet, getFaucetInfo } from '../../chain/faucet.js';
 
+type ContextGetter = () => AgentContext | null;
 const noop: AuditFn = () => {};
+const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
-export function registerChainRegistryTools(server: McpServer, audit: AuditFn = noop): void {
+export function registerChainRegistryTools(server: McpServer, getContext: ContextGetter, audit: AuditFn = noop): void {
   server.registerTool(
     'list_supported_chains',
     {
@@ -52,6 +55,24 @@ export function registerChainRegistryTools(server: McpServer, audit: AuditFn = n
       }),
     },
     async ({ chain_id, address }) => {
+      const ctx = getContext();
+      if (!ctx) {
+        audit({ action: 'request_faucet', chain_id, status: 'denied', details: 'No agent context' });
+        return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
+      }
+      // The agent must own this chain. Gate on chain membership directly rather
+      // than a tx-type check, so a deployer without 'read' in allowed_types can
+      // still fund a testnet it legitimately has access to.
+      if (!ctx.config.chains.includes(chain_id)) {
+        const reason = `Agent does not have access to chain ${chain_id}.`;
+        audit({ action: 'request_faucet', chain_id, status: 'denied', details: reason });
+        return { content: [{ type: 'text' as const, text: reason }] };
+      }
+      if (!ADDRESS_PATTERN.test(address)) {
+        audit({ action: 'request_faucet', chain_id, status: 'denied', details: 'Invalid recipient address' });
+        return { content: [{ type: 'text' as const, text: `Invalid recipient address: ${JSON.stringify(address)}` }] };
+      }
+
       const result = await requestFaucet(chain_id, address);
       audit({ action: 'request_faucet', chain_id, status: 'approved', details: `Faucet request for chain ${chain_id}` });
       return {
