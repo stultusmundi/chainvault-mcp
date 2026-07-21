@@ -85,6 +85,11 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
       }),
     },
     async ({ token_id, currency }) => {
+      const ctx = getContext();
+      if (!ctx) {
+        audit({ action: 'query_price', status: 'denied', details: 'No agent context' });
+        return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
+      }
       const cur = currency ?? 'usd';
       try {
         const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(token_id)}&vs_currencies=${encodeURIComponent(cur)}`;
