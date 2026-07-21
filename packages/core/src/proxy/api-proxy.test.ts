@@ -20,6 +20,7 @@ describe('ApiProxy', () => {
     });
 
     const result = await proxy.request({
+      agentId: 'test-agent',
       baseUrl: 'https://api.etherscan.io',
       endpoint: '/api',
       params: { module: 'contract', action: 'getabi', address: '0x1234' },
@@ -39,6 +40,7 @@ describe('ApiProxy', () => {
     });
 
     const params = {
+      agentId: 'test-agent',
       baseUrl: 'https://api.etherscan.io',
       endpoint: '/api',
       params: { module: 'contract', action: 'getabi', address: '0x1234' },
@@ -51,6 +53,43 @@ describe('ApiProxy', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1); // second call uses cache
   });
 
+  it('does not serve one agent a response cached for another agent', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ result: 'data' }) });
+    const base = {
+      agentId: 'test-agent',
+      baseUrl: 'https://api.etherscan.io',
+      endpoint: '/api',
+      params: { module: 'contract', action: 'getabi', address: '0x1234' },
+    };
+    await proxy.request({ ...base, apiKey: 'KEY_A', agentId: 'agent-a' });
+    await proxy.request({ ...base, apiKey: 'KEY_B', agentId: 'agent-b' });
+    // agent-b must trigger its own fetch (with its own key), not reuse agent-a's cache.
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[1][0]).toContain('apikey=KEY_B');
+  });
+
+  it('isolates rate-limit budgets per agent', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ result: 'ok' }) });
+    const base = {
+      agentId: 'test-agent',
+      baseUrl: 'https://api.etherscan.io',
+      endpoint: '/api',
+      apiKey: 'KEY',
+      rateLimits: { per_second: 1, daily: 1000 },
+    };
+    // Distinct params per request so none is a cache hit — this must exercise
+    // the rate limiter, not the cache.
+    await proxy.request({ ...base, params: { r: 'a1' }, agentId: 'agent-a' }); // a: 1/1
+    // agent-b has its own budget and must still succeed.
+    await expect(
+      proxy.request({ ...base, params: { r: 'b1' }, agentId: 'agent-b' }),
+    ).resolves.toBeDefined();
+    // agent-a is now over its own limit.
+    await expect(
+      proxy.request({ ...base, params: { r: 'a2' }, agentId: 'agent-a' }),
+    ).rejects.toThrow('Rate limit exceeded');
+  });
+
   it('enforces per-second rate limit', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
@@ -58,6 +97,7 @@ describe('ApiProxy', () => {
     });
 
     const params = {
+      agentId: 'test-agent',
       baseUrl: 'https://api.etherscan.io',
       endpoint: '/api',
       params: { action: 'test' },
@@ -80,13 +120,14 @@ describe('ApiProxy', () => {
     });
 
     await proxy.request({
+      agentId: 'test-agent',
       baseUrl: 'https://api.etherscan.io',
       endpoint: '/api',
       params: { action: 'test' },
       apiKey: 'KEY',
     });
 
-    const usage = proxy.getUsage('https://api.etherscan.io');
+    const usage = proxy.getUsage('test-agent', 'https://api.etherscan.io');
     expect(usage.totalRequests).toBe(1);
   });
 
@@ -99,6 +140,7 @@ describe('ApiProxy', () => {
       });
 
     const result = await proxy.request({
+      agentId: 'test-agent',
       baseUrl: 'https://api.etherscan.io',
       endpoint: '/api',
       params: { action: 'test' },
@@ -114,6 +156,7 @@ describe('ApiProxy', () => {
 
     await expect(
       proxy.request({
+        agentId: 'test-agent',
         baseUrl: 'https://api.etherscan.io',
         endpoint: '/api',
         params: {},
@@ -129,6 +172,7 @@ describe('ApiProxy', () => {
 
     await expect(
       proxy.request({
+        agentId: 'test-agent',
         baseUrl: 'https://api.etherscan.io',
         endpoint: '/api',
         params: {},
@@ -147,6 +191,7 @@ describe('ApiProxy', () => {
 
     await expect(
       proxy.request({
+        agentId: 'test-agent',
         baseUrl: 'https://api.etherscan.io',
         endpoint: '/api',
         params: {},
