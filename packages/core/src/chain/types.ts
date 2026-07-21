@@ -5,14 +5,14 @@ export interface BalanceResult {
 
 export interface ReadContractParams {
   address: string;
-  abi: any[];
+  abi: readonly any[];
   functionName: string;
   args: any[];
 }
 
 export interface SimulateParams {
   address: string;
-  abi: any[];
+  abi: readonly any[];
   functionName: string;
   args: any[];
   account: string;
@@ -27,7 +27,7 @@ export interface SimulateResult {
 
 export interface EventParams {
   address: string;
-  abi: any[];
+  abi: readonly any[];
   eventName: string;
   fromBlock?: bigint;
   toBlock?: bigint;
@@ -59,7 +59,7 @@ export interface EstimateGasParams {
 }
 
 export interface DeployParams {
-  abi: any[];
+  abi: readonly any[];
   bytecode: string;
   args?: any[];
   privateKey: string;
@@ -67,7 +67,7 @@ export interface DeployParams {
 
 export interface WriteContractParams {
   address: string;
-  abi: any[];
+  abi: readonly any[];
   functionName: string;
   args: any[];
   privateKey: string;
