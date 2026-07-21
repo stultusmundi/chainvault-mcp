@@ -65,6 +65,23 @@ export async function requestFaucet(
   };
 }
 
+/**
+ * Safely pulls a transaction hash out of an untrusted faucet JSON response.
+ * The response body is `unknown` — a hostile or buggy faucet could return a
+ * non-object, or a non-string hash — so we accept only a non-empty string from
+ * the known field names and ignore anything else. This keeps bogus values
+ * (e.g. `[object Object]`) out of the agent-visible result message.
+ */
+function extractTxHash(data: unknown): string | undefined {
+  if (typeof data !== 'object' || data === null) return undefined;
+  const record = data as Record<string, unknown>;
+  for (const field of ['txHash', 'hash', 'transactionHash'] as const) {
+    const value = record[field];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return undefined;
+}
+
 async function tryApiFaucet(
   faucet: FaucetConfig,
   address: string,
@@ -90,8 +107,8 @@ async function tryApiFaucet(
       };
     }
 
-    const data = await response.json();
-    const txHash = data.txHash || data.hash || data.transactionHash || undefined;
+    const data: unknown = await response.json();
+    const txHash = extractTxHash(data);
 
     return {
       success: true,
