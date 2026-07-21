@@ -15,7 +15,7 @@
     "test:fork": "WORKSTYLE_FORK=1 vitest run --project fork",
     "test:testnet": "vitest run --project testnet",
     "test:scenarios": "npm run build && tsx tests/agent-e2e/run-scenarios.ts",
-    "lint": "tsc --noEmit",
+    "lint": "tsc -p tsconfig.check.json --noEmit",
     "chainvault": "node packages/cli/dist/index.js",
     "serve": "node packages/cli/dist/index.js serve"
   },
