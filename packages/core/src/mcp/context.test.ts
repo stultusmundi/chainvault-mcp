@@ -56,6 +56,16 @@ describe('createAgentContext', () => {
     expect(ctx!.rules).toBeDefined();
   });
 
+  it('resolves the single etherscan key for the unified V2 endpoint', async () => {
+    const ctx = await createAgentContext(testDir, vaultKey);
+    // Under Etherscan V2 one `etherscan` key (base_url api.etherscan.io) serves
+    // every chain via getExplorerApiUrl → https://api.etherscan.io/v2/api.
+    const match = ctx!.getApiKeyForExplorer('https://api.etherscan.io/v2/api');
+    expect(match).not.toBeNull();
+    expect(match!.serviceName).toBe('etherscan');
+    expect(match!.key).toBe('TEST_API_KEY');
+  });
+
   it('context has keys with public addresses only', async () => {
     const ctx = await createAgentContext(testDir, vaultKey);
     expect(ctx!.keys).toHaveLength(1);

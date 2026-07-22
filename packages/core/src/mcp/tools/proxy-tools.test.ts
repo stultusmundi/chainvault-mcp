@@ -53,3 +53,78 @@ describe('query_price access control', () => {
     expect(res.content[0].text).toContain('3000');
   });
 });
+
+/** Context with a single Etherscan key that serves all chains (V2 model). */
+function createExplorerContext(): AgentContext {
+  return {
+    agentName: 'explorer-agent',
+    config: { api_access: { etherscan: {} } } as unknown as AgentContext['config'],
+    rules: { checkApiRequest: () => ({ approved: true }) } as unknown as AgentContext['rules'],
+    keys: [],
+    getPrivateKeyForChain: () => null,
+    getApiKey: () => null,
+    getApiKeyForExplorer: () => ({ serviceName: 'etherscan', key: 'SECRET_KEY' }),
+    getRpcUrlForChain: () => null,
+  };
+}
+
+describe('query_explorer Etherscan V2', () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+  });
+
+  it('calls the unified V2 endpoint with a chainid param for Sepolia', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ status: '1', result: 'ok' }) });
+    const server = createFakeServer();
+    registerProxyTools(server, () => createExplorerContext(), vi.fn());
+
+    await server.handlers.get('query_explorer')({
+      chain_id: 11155111,
+      module: 'contract',
+      action: 'getabi',
+      params: { address: '0xabc' },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('https://api.etherscan.io/v2/api');
+    expect(url).toContain('chainid=11155111');
+    expect(url).toContain('module=contract');
+    expect(url).toContain('action=getabi');
+    expect(url).toContain('address=0xabc');
+    // must NOT hit the deprecated V1 host
+    expect(url).not.toContain('api-sepolia.etherscan.io');
+  });
+
+  it('sends the chain-specific chainid for a chain that had no V1 API (Base Sepolia)', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ status: '1', result: 'ok' }) });
+    const server = createFakeServer();
+    registerProxyTools(server, () => createExplorerContext(), vi.fn());
+
+    const res = await server.handlers.get('query_explorer')({
+      chain_id: 84532,
+      module: 'account',
+      action: 'balance',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('chainid=84532');
+    expect(res.content[0].text).toContain('ok');
+  });
+
+  it('denies an unsupported chain without any external call', async () => {
+    const server = createFakeServer();
+    const audit = vi.fn();
+    registerProxyTools(server, () => createExplorerContext(), audit);
+
+    const res = await server.handlers.get('query_explorer')({
+      chain_id: 999999,
+      module: 'contract',
+      action: 'getabi',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.content[0].text).toMatch(/no block explorer/i);
+  });
+});

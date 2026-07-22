@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { registerChainTools, sanitizeError } from './chain-tools.js';
 import type { AgentContext } from '../context.js';
 import type { SimulateResult } from '../../chain/types.js';
@@ -133,6 +133,65 @@ describe('simulate_transaction value conversion', () => {
     expect(simulateTransactionMock).toHaveBeenCalledTimes(1);
     const callArgs = simulateTransactionMock.mock.calls[0][0];
     expect(callArgs.value).toBeUndefined();
+  });
+});
+
+describe('verify_contract Etherscan V2', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function ctxWithExplorerKey(): AgentContext {
+    return {
+      ...createApprovedContext(),
+      getApiKeyForExplorer: () => ({ serviceName: 'etherscan', key: 'SECRET_KEY' }),
+    };
+  }
+
+  it('posts to the unified V2 endpoint with a chainid field', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ status: '1', result: 'GUID' }) });
+    const server = createFakeServer();
+    registerChainTools(server as any, () => ctxWithExplorerKey());
+
+    await server.handlers.get('verify_contract')!({
+      chain_id: 11155111,
+      address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+      source_code: 'contract C {}',
+      contract_name: 'C',
+      compiler_version: '0.8.24',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    // V2 endpoint used verbatim — NOT the old `${apiUrl}/api` V1 shape.
+    expect(String(url)).toBe('https://api.etherscan.io/v2/api');
+    expect(String(url)).not.toContain('api-sepolia.etherscan.io');
+    const body = String((init as { body: string }).body);
+    expect(body).toContain('chainid=11155111');
+    expect(body).toContain('action=verifysourcecode');
+  });
+
+  it('denies verification on an unsupported chain without any fetch', async () => {
+    const server = createFakeServer();
+    registerChainTools(server as any, () => ctxWithExplorerKey());
+
+    const res = await server.handlers.get('verify_contract')!({
+      chain_id: 999999,
+      address: '0xabc',
+      source_code: 'x',
+      contract_name: 'C',
+      compiler_version: '0.8.24',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.content[0].text).toMatch(/no block explorer/i);
   });
 });
 
