@@ -3,7 +3,7 @@ import { parseEther } from 'viem';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import { EvmAdapter } from '../../chain/evm-adapter.js';
-import { getChainConfig, getExplorerApiUrl } from '../../chain/chains.js';
+import { getExplorerApiUrl } from '../../chain/chains.js';
 import type { AgentContext } from '../context.js';
 import type { AuditFn } from '../audit-fn.js';
 import { sanitizeError } from './sanitize.js';
@@ -193,9 +193,8 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       // Find an API key for this explorer via controlled accessor
       const apiKeyMatch = ctx.getApiKeyForExplorer(explorerApiUrl);
       if (!apiKeyMatch) {
-        const explorerName = getChainConfig(chain_id)?.blockExplorer?.name ?? 'the block explorer';
         audit({ action: 'verify_contract', chain_id, status: 'denied', details: 'No API key for explorer' });
-        return { content: [{ type: 'text' as const, text: `No API key configured for ${explorerName}. Add one via the TUI or CLI.` }] };
+        return { content: [{ type: 'text' as const, text: `No Etherscan API key configured for chain ${chain_id}. Add a single 'etherscan' key — Etherscan V2 covers every chain — via the TUI or CLI.` }] };
       }
 
       try {

@@ -102,7 +102,11 @@ export async function createAgentContext(
             const explorerHost = new URL(explorerApiUrl).hostname;
             const akDomain = akHost.split('.').slice(-2).join('.');
             const explorerDomain = explorerHost.split('.').slice(-2).join('.');
-            if (akDomain === explorerDomain || akHost.includes(explorerDomain) || explorerHost.includes(akDomain)) {
+            // Registrable-domain equality only. Substring matching is unsafe now
+            // that every explorer URL resolves to api.etherscan.io: a key stored
+            // under `foo.etherscan.io.evil.com` or `scan.io` would otherwise
+            // match and have its secret sent to Etherscan.
+            if (akDomain === explorerDomain) {
               return { serviceName: name, key: ak.key };
             }
           } catch { continue; }

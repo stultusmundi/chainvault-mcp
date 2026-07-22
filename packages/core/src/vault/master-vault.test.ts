@@ -92,6 +92,16 @@ describe('MasterVault', () => {
       expect(stored).toBe('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
     });
 
+    it('normalizes an uppercase 0X prefix to a lowercase 0x key', async () => {
+      await MasterVault.init(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
+      await vault.addKey('upper', '0Xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', [1]);
+      expect(vault.getData().keys['upper'].private_key).toBe(
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      );
+      expect(vault.listKeys()[0].address).toBe('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+    });
+
     it('rejects a private key that is not valid hex even after normalization', async () => {
       await MasterVault.init(testDir, 'test-password');
       vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });

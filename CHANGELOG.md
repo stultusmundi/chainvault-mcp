@@ -27,7 +27,11 @@ limit-semantics decision left for a follow-up.
   (api-sepolia.etherscan.io, api.polygonscan.com, ...), which Etherscan has shut
   down. A single Etherscan API key now serves every supported chain — and the 7
   chains that previously had no explorer API (e.g. Base/Arbitrum/Optimism
-  Sepolia, Amoy, Fuji) gain one.
+  Sepolia, Amoy, Fuji) gain one. **Migration:** agents provisioned with a
+  per-chain key (PolygonScan, Arbiscan, ...) must be re-keyed with a single
+  `etherscan` key — the per-chain hosts no longer work. Explorer key matching
+  is also tightened to registrable-domain equality (a key under a look-alike
+  domain like `foo.etherscan.io.evil.com` no longer matches).
 - **Private key normalization:** the vault (`MasterVault.addKey`) now accepts a
   raw 64-hex private key without the `0x` prefix and normalizes it, instead of
   throwing an opaque viem error.

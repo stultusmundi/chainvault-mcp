@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import type { AgentContext } from '../context.js';
 import type { AuditFn } from '../audit-fn.js';
-import { getChainConfig, getExplorerApiUrl } from '../../chain/chains.js';
+import { getExplorerApiUrl } from '../../chain/chains.js';
 import { ApiProxy } from '../../proxy/api-proxy.js';
 import { sanitizeError } from './sanitize.js';
 
@@ -43,9 +43,8 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
       // Find API key matching this explorer via controlled accessor
       const apiKeyMatch = ctx.getApiKeyForExplorer(explorerApiUrl);
       if (!apiKeyMatch) {
-        const explorerName = getChainConfig(chain_id)?.blockExplorer?.name ?? 'the block explorer';
         audit({ action: 'query_explorer', chain_id, status: 'denied', details: 'No API key for explorer' });
-        return { content: [{ type: 'text' as const, text: `No API key configured for ${explorerName}. Add one via the TUI or CLI.` }] };
+        return { content: [{ type: 'text' as const, text: `No Etherscan API key configured for chain ${chain_id}. Add a single 'etherscan' key — Etherscan V2 covers every chain — via the TUI or CLI.` }] };
       }
       const { serviceName, key: apiKeyValue } = apiKeyMatch;
 
@@ -65,7 +64,10 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
           // explorerApiUrl already includes the /v2/api path.
           baseUrl: explorerApiUrl,
           endpoint: '',
-          params: { chainid: String(chain_id), module: mod, action, ...(extraParams ?? {}) },
+          // Spread agent-supplied params FIRST so the trusted chainid/module/
+          // action (the ones the rules engine checked) always win and can't be
+          // overridden by a crafted `params` entry.
+          params: { ...(extraParams ?? {}), chainid: String(chain_id), module: mod, action },
           apiKey: apiKeyValue,
           rateLimits,
         });

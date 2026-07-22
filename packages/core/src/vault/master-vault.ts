@@ -14,8 +14,12 @@ const SALT_FILENAME = 'master.salt';
  * `privateKeyToAddress`, which throws on anything that isn't a valid key.
  */
 export function normalizePrivateKey(privateKey: string): `0x${string}` {
-  const trimmed = privateKey.trim();
-  return (trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`) as `0x${string}`;
+  // Strip a case-insensitive 0x/0X prefix and re-add a lowercase one, so
+  // `0X…`, `0x…`, and a bare `…` all yield the lowercase-prefixed form viem
+  // expects. Internal whitespace / non-hex is left for privateKeyToAddress to
+  // reject rather than silently stripped.
+  const body = privateKey.trim().replace(/^0x/i, '');
+  return `0x${body}` as `0x${string}`;
 }
 
 export class MasterVault {

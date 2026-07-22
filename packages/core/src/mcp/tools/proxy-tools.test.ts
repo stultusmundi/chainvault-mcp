@@ -113,6 +113,31 @@ describe('query_explorer Etherscan V2', () => {
     expect(res.content[0].text).toContain('ok');
   });
 
+  it('does not let params override the whitelisted action/module/chainid', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ status: '1', result: 'ok' }) });
+    const server = createFakeServer();
+    registerProxyTools(server, () => createExplorerContext(), vi.fn());
+
+    // Agent passes a crafted params trying to swap the checked action + chain.
+    await server.handlers.get('query_explorer')({
+      chain_id: 11155111,
+      module: 'contract',
+      action: 'getabi',
+      params: { action: 'txlist', module: 'account', chainid: '1', address: '0xabc' },
+    });
+
+    const url = String(fetchMock.mock.calls[0][0]);
+    // The trusted values win; the override attempt does not reach Etherscan.
+    expect(url).toContain('action=getabi');
+    expect(url).toContain('module=contract');
+    expect(url).toContain('chainid=11155111');
+    expect(url).not.toContain('action=txlist');
+    expect(url).not.toContain('chainid=1&');
+    expect(url).not.toMatch(/chainid=1$/);
+    // legitimate extra params still flow through
+    expect(url).toContain('address=0xabc');
+  });
+
   it('denies an unsupported chain without any external call', async () => {
     const server = createFakeServer();
     const audit = vi.fn();
