@@ -22,7 +22,10 @@ export interface ChainConfig {
     websocket?: string[];
     http: string[];
   };
-  blockExplorer?: { name: string; url: string; apiUrl?: string };
+  // `url` is the human-facing explorer (etherscan.io, ...). The programmatic
+  // API base URL is not stored per-chain: every supported chain uses the
+  // unified Etherscan V2 endpoint via getExplorerApiUrl().
+  blockExplorer?: { name: string; url: string };
   faucets?: FaucetConfig[];
 }
 
@@ -42,7 +45,7 @@ export const SUPPORTED_CHAINS: ReadonlyArray<ChainConfig> = [
       websocket: ['wss://ethereum-rpc.publicnode.com'],
       http: ['https://ethereum-rpc.publicnode.com'],
     },
-    blockExplorer: { name: 'Etherscan', url: 'https://etherscan.io', apiUrl: 'https://api.etherscan.io' },
+    blockExplorer: { name: 'Etherscan', url: 'https://etherscan.io' },
   },
   {
     chainId: 11155111,
@@ -53,7 +56,7 @@ export const SUPPORTED_CHAINS: ReadonlyArray<ChainConfig> = [
       websocket: ['wss://ethereum-sepolia-rpc.publicnode.com'],
       http: ['https://ethereum-sepolia-rpc.publicnode.com'],
     },
-    blockExplorer: { name: 'Etherscan Sepolia', url: 'https://sepolia.etherscan.io', apiUrl: 'https://api-sepolia.etherscan.io' },
+    blockExplorer: { name: 'Etherscan Sepolia', url: 'https://sepolia.etherscan.io' },
     faucets: [
       { name: 'Google Cloud Faucet', url: 'https://cloud.google.com/application/web3/faucet/ethereum/sepolia', type: 'api', requestEndpoint: 'https://cloud.google.com/application/web3/faucet/ethereum/sepolia', method: 'POST' },
       { name: 'Sepolia PoW Faucet', url: 'https://sepolia-faucet.pk910.de', type: 'browser' },
@@ -70,7 +73,7 @@ export const SUPPORTED_CHAINS: ReadonlyArray<ChainConfig> = [
       websocket: ['wss://polygon-bor-rpc.publicnode.com'],
       http: ['https://polygon-bor-rpc.publicnode.com'],
     },
-    blockExplorer: { name: 'PolygonScan', url: 'https://polygonscan.com', apiUrl: 'https://api.polygonscan.com' },
+    blockExplorer: { name: 'PolygonScan', url: 'https://polygonscan.com' },
   },
   {
     chainId: 80002,
@@ -98,7 +101,7 @@ export const SUPPORTED_CHAINS: ReadonlyArray<ChainConfig> = [
       websocket: ['wss://arbitrum-one-rpc.publicnode.com'],
       http: ['https://arbitrum-one-rpc.publicnode.com'],
     },
-    blockExplorer: { name: 'Arbiscan', url: 'https://arbiscan.io', apiUrl: 'https://api.arbiscan.io' },
+    blockExplorer: { name: 'Arbiscan', url: 'https://arbiscan.io' },
   },
   {
     chainId: 421614,
@@ -125,7 +128,7 @@ export const SUPPORTED_CHAINS: ReadonlyArray<ChainConfig> = [
       websocket: ['wss://optimism-rpc.publicnode.com'],
       http: ['https://optimism-rpc.publicnode.com'],
     },
-    blockExplorer: { name: 'Optimism Explorer', url: 'https://optimistic.etherscan.io', apiUrl: 'https://api-optimistic.etherscan.io' },
+    blockExplorer: { name: 'Optimism Explorer', url: 'https://optimistic.etherscan.io' },
   },
   {
     chainId: 11155420,
@@ -152,7 +155,7 @@ export const SUPPORTED_CHAINS: ReadonlyArray<ChainConfig> = [
       websocket: ['wss://base-rpc.publicnode.com'],
       http: ['https://base-rpc.publicnode.com'],
     },
-    blockExplorer: { name: 'BaseScan', url: 'https://basescan.org', apiUrl: 'https://api.basescan.org' },
+    blockExplorer: { name: 'BaseScan', url: 'https://basescan.org' },
   },
   {
     chainId: 84532,
@@ -180,7 +183,7 @@ export const SUPPORTED_CHAINS: ReadonlyArray<ChainConfig> = [
       websocket: ['wss://bsc-rpc.publicnode.com'],
       http: ['https://bsc-rpc.publicnode.com'],
     },
-    blockExplorer: { name: 'BscScan', url: 'https://bscscan.com', apiUrl: 'https://api.bscscan.com' },
+    blockExplorer: { name: 'BscScan', url: 'https://bscscan.com' },
   },
   {
     chainId: 97,
@@ -249,4 +252,24 @@ export function getMainnetChains(): ChainConfig[] {
 
 export function getChainsWithFaucets(): ChainConfig[] {
   return SUPPORTED_CHAINS.filter((c) => c.faucets && c.faucets.length > 0);
+}
+
+/**
+ * The Etherscan V2 unified API endpoint. A single endpoint + a single API key
+ * serve every supported chain; the chain is selected with a `chainid` query
+ * parameter. This replaced the per-chain V1 hosts (api-sepolia.etherscan.io,
+ * api.polygonscan.com, api.arbiscan.io, ...), which Etherscan has deprecated.
+ * See https://docs.etherscan.io/v2-migration.
+ */
+export const ETHERSCAN_V2_API_URL = 'https://api.etherscan.io/v2/api';
+
+/**
+ * Returns the block-explorer API base URL for a chain, or undefined if the
+ * chain is not in the supported registry. Every supported chain is covered by
+ * Etherscan V2 (verified against https://api.etherscan.io/v2/chainlist), so
+ * this returns the unified V2 endpoint for all of them; callers must pass the
+ * chain's numeric id as the `chainid` request parameter.
+ */
+export function getExplorerApiUrl(chainId: number): string | undefined {
+  return getChainConfig(chainId) ? ETHERSCAN_V2_API_URL : undefined;
 }

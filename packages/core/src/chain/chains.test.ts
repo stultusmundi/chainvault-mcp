@@ -6,6 +6,8 @@ import {
   getTestnetChains,
   getMainnetChains,
   getChainsWithFaucets,
+  getExplorerApiUrl,
+  ETHERSCAN_V2_API_URL,
   type ChainConfig,
 } from './chains.js';
 
@@ -177,6 +179,33 @@ describe('Chain Registry', () => {
           expect(faucet.url.length).toBeGreaterThan(0);
           expect(faucet.name.length).toBeGreaterThan(0);
         }
+      }
+    });
+  });
+
+  describe('getExplorerApiUrl (Etherscan V2)', () => {
+    it('returns the unified V2 endpoint for a mainnet chain', () => {
+      expect(getExplorerApiUrl(1)).toBe(ETHERSCAN_V2_API_URL);
+    });
+
+    it('returns the same unified V2 endpoint for Sepolia', () => {
+      expect(getExplorerApiUrl(11155111)).toBe('https://api.etherscan.io/v2/api');
+    });
+
+    it('returns the V2 endpoint for chains that had no explorer API before V2', () => {
+      // e.g. Base Sepolia (84532), Arbitrum Sepolia (421614) — previously had
+      // no apiUrl configured; Etherscan V2 covers them via chainid.
+      expect(getExplorerApiUrl(84532)).toBe(ETHERSCAN_V2_API_URL);
+      expect(getExplorerApiUrl(421614)).toBe(ETHERSCAN_V2_API_URL);
+    });
+
+    it('returns undefined for an unsupported chain', () => {
+      expect(getExplorerApiUrl(999999)).toBeUndefined();
+    });
+
+    it('covers every supported chain (all are on Etherscan V2)', () => {
+      for (const chain of SUPPORTED_CHAINS) {
+        expect(getExplorerApiUrl(chain.chainId)).toBe(ETHERSCAN_V2_API_URL);
       }
     });
   });
