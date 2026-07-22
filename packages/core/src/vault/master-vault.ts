@@ -7,6 +7,17 @@ import { MasterVaultDataSchema, type MasterVaultData } from './types.js';
 const VAULT_FILENAME = 'master.vault';
 const SALT_FILENAME = 'master.salt';
 
+/**
+ * Normalizes a private key to the 0x-prefixed form viem requires. Accepts a
+ * raw 64-hex key (a common paste from key exports that omit the prefix) and
+ * trims surrounding whitespace. Does NOT validate hex — that is left to
+ * `privateKeyToAddress`, which throws on anything that isn't a valid key.
+ */
+export function normalizePrivateKey(privateKey: string): `0x${string}` {
+  const trimmed = privateKey.trim();
+  return (trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`) as `0x${string}`;
+}
+
 export class MasterVault {
   private data: MasterVaultData | null = null;
   private masterKey: Buffer | null = null;
@@ -102,8 +113,10 @@ export class MasterVault {
 
   async addKey(name: string, privateKey: string, chains: number[]): Promise<void> {
     const data = this.requireUnlocked();
-    const address = privateKeyToAddress(privateKey as `0x${string}`);
-    data.keys[name] = { private_key: privateKey, address, chains };
+    const normalized = normalizePrivateKey(privateKey);
+    // Throws on anything that isn't a valid 32-byte hex key.
+    const address = privateKeyToAddress(normalized);
+    data.keys[name] = { private_key: normalized, address, chains };
     await this.save();
   }
 

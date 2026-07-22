@@ -77,6 +77,27 @@ describe('MasterVault', () => {
       expect(keys[0]).not.toHaveProperty('private_key');
     });
 
+    it('accepts a private key without the 0x prefix and normalizes it', async () => {
+      await MasterVault.init(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
+      // Same key as above but with no 0x prefix — a common paste mistake.
+      await vault.addKey('raw-key', 'ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', [1]);
+      const keys = vault.listKeys();
+      expect(keys).toHaveLength(1);
+      // Must derive the SAME address as the 0x-prefixed form (Anvil account #0).
+      expect(keys[0].address).toBe('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+      // The stored private key must be normalized to 0x-prefixed so downstream
+      // signing (viem privateKeyToAccount) works.
+      const stored = vault.getData().keys['raw-key'].private_key;
+      expect(stored).toBe('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+    });
+
+    it('rejects a private key that is not valid hex even after normalization', async () => {
+      await MasterVault.init(testDir, 'test-password');
+      vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });
+      await expect(vault.addKey('bad', 'not-a-valid-hex-key', [1])).rejects.toThrow();
+    });
+
     it('removes a key', async () => {
       await MasterVault.init(testDir, 'test-password');
       vault = await MasterVault.unlock(testDir, 'test-password', { autoLockMs: 0 });

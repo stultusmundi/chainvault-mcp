@@ -1,5 +1,5 @@
 // Vault
-export { MasterVault } from './vault/master-vault.js';
+export { MasterVault, normalizePrivateKey } from './vault/master-vault.js';
 export { AgentVaultManager } from './vault/agent-vault.js';
 export {
   encrypt,
@@ -31,6 +31,8 @@ export {
   getTestnetChains,
   getMainnetChains,
   getChainsWithFaucets,
+  getExplorerApiUrl,
+  ETHERSCAN_V2_API_URL,
 } from './chain/chains.js';
 export type { ChainConfig, FaucetConfig } from './chain/chains.js';
 export { requestFaucet, getFaucetInfo } from './chain/faucet.js';
