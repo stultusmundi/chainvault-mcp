@@ -1,5 +1,5 @@
 {
-  "//": "Type-check-only config for the root tests/ trees (workstyle anvil/fork/testnet suites + agent-e2e scenario scripts). These run under vitest/tsx (esbuild, ESM), so they are checked with bundler resolution rather than the packages' Node16 — see issue #33. No emit. Paired with tsconfig.check.json in `npm run lint`.",
+  "//": "Type-check-only config for the root tests/ trees (workstyle anvil/fork/testnet suites + agent-e2e scenario scripts) plus the root vitest.config.ts. These run under vitest/tsx (esbuild, ESM), so they are checked with bundler resolution rather than the packages' Node16 — see issue #33. No emit. Paired with tsconfig.check.json in `npm run lint`.",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -16,5 +16,5 @@
       "@chainvault/core": ["./packages/core/src/index.ts"]
     }
   },
-  "include": ["tests/**/*.ts"]
+  "include": ["tests/**/*.ts", "vitest.config.ts"]
 }
