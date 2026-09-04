@@ -53,14 +53,24 @@ export async function connectMcp(
     client,
     server,
     close: async () => {
+      harnessByClient.delete(handle.client);
       await handle.client.close();
       await handle.server.getMcpServer().close();
       await fixture.cleanup();
       await anvil.stop();
     },
   };
+  harnessByClient.set(client, anvil);
   return handle;
 }
+
+/**
+ * Maps each connected client back to its anvil harness, so callToolJson can
+ * wait for a returned transaction to be mined. Tests pass `mcp.client` around
+ * rather than the whole handle, so the lookup lives here instead of widening
+ * every call site.
+ */
+const harnessByClient = new WeakMap<Client, AnvilHarness>();
 
 export async function callToolJson(client: Client, name: string, args: Record<string, unknown>): Promise<any> {
   const result = await client.callTool({ name, arguments: args });
@@ -68,11 +78,22 @@ export async function callToolJson(client: Client, name: string, args: Record<st
     .filter((c) => c.type === 'text')
     .map((c) => c.text)
     .join('\n');
+  let parsed: any;
   try {
-    return JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch {
     throw new Error(`Tool ${name} returned non-JSON: ${text}`);
   }
+
+  // Write tools return as soon as the tx is broadcast — under anvil >= 1.8 the
+  // block is mined asynchronously, so a following read would race the miner.
+  // Settle here so every write-then-read test is deterministic on any anvil.
+  const hash = parsed?.hash ?? parsed?.transactionHash;
+  const anvil = harnessByClient.get(client);
+  if (anvil && typeof hash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(hash)) {
+    await anvil.waitForTx(hash);
+  }
+  return parsed;
 }
 
 /** Like callToolJson but returns the raw text (for denial/error messages). */
