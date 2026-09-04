@@ -49,6 +49,7 @@ describe.skipIf(!ready)('EvmAdapter lifecycle on anvil', () => {
       privateKey: ANVIL_ACCOUNTS[0].privateKey,
     });
     expect(write.hash).toMatch(/^0x/);
+    await anvil.waitForTx(write.hash);
 
     const tx = await adapter.getTransaction(write.hash);
     expect(tx.receipt.status).toBe('success');
@@ -72,10 +73,11 @@ describe.skipIf(!ready)('EvmAdapter lifecycle on anvil', () => {
       abi: factory.abi, bytecode: factory.bytecode, args: [],
       privateKey: ANVIL_ACCOUNTS[0].privateKey,
     });
-    await adapter.writeContract({
+    const created = await adapter.writeContract({
       address: address!, abi: factory.abi, functionName: 'createChild', args: [7n],
       privateKey: ANVIL_ACCOUNTS[0].privateKey,
     });
+    await anvil.waitForTx(created.hash);
     const childAddr = await adapter.readContract({
       address: address!, abi: factory.abi, functionName: 'children', args: [0n],
     });
@@ -98,11 +100,14 @@ describe.skipIf(!ready)('EvmAdapter lifecycle on anvil', () => {
     });
     const at = proxyDeploy.address!;
 
-    await adapter.writeContract({ address: at, abi: v1.abi, functionName: 'increment', args: [], privateKey: pk });
+    const inc1 = await adapter.writeContract({ address: at, abi: v1.abi, functionName: 'increment', args: [], privateKey: pk });
+    await anvil.waitForTx(inc1.hash);
     expect(await adapter.readContract({ address: at, abi: v1.abi, functionName: 'count', args: [] })).toBe(1n);
 
-    await adapter.writeContract({ address: at, abi: v1.abi, functionName: 'upgradeTo', args: [v2Deploy.address!], privateKey: pk });
-    await adapter.writeContract({ address: at, abi: v2.abi, functionName: 'increment', args: [], privateKey: pk });
+    const upgrade = await adapter.writeContract({ address: at, abi: v1.abi, functionName: 'upgradeTo', args: [v2Deploy.address!], privateKey: pk });
+    await anvil.waitForTx(upgrade.hash);
+    const inc2 = await adapter.writeContract({ address: at, abi: v2.abi, functionName: 'increment', args: [], privateKey: pk });
+    await anvil.waitForTx(inc2.hash);
     expect(await adapter.readContract({ address: at, abi: v2.abi, functionName: 'count', args: [] })).toBe(3n);
     expect(await adapter.readContract({ address: at, abi: v2.abi, functionName: 'version', args: [] })).toBe(2n);
   });
