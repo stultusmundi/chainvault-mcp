@@ -46,7 +46,9 @@ export default defineConfig({
           name: 'fork',
           include: ['tests/workstyle/fork/**/*.test.ts'],
           testTimeout: 120_000,
-          hookTimeout: 300_000,
+          // Must cover every fork endpoint being tried in turn (see
+          // AnvilHarness.start) plus the pre-flight probe, with headroom.
+          hookTimeout: 420_000,
         },
       },
       {

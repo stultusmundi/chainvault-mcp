@@ -54,9 +54,11 @@ jobs:
       - run: npx vitest run --project fork
         env:
           WORKSTYLE_FORK: '1'
-          # publicnode's free tier 403s on any pinned (non-"latest") historical
-          # state fetch, so default to drpc.org, which serves the pinned block.
-          WORKSTYLE_FORK_URL: ${{ secrets.FORK_RPC_URL || 'https://eth.drpc.org' }}
+          # Only set when a keyed endpoint is configured. Hardcoding a default
+          # here would override the suite's built-in candidate list and disable
+          # the fallback, which is what kept the fork job red: one throttled
+          # provider failed the whole run. Empty means "use the candidates".
+          WORKSTYLE_FORK_URL: ${{ secrets.FORK_RPC_URL }}
       - name: Open issue on failure
         if: failure()
         env:

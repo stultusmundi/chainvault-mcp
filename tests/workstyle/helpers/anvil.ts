@@ -81,10 +81,13 @@ export class AnvilHarness {
       return AnvilHarness.spawnOne(undefined, chainId, opts.forkBlock, 15_000);
     }
 
+    // Budget per attempt. Every candidate must fit inside the fork project's
+    // hookTimeout (see vitest.config.ts) with room for the pre-flight probe.
+    const perAttemptMs = 90_000;
     const failures: string[] = [];
     for (const forkUrl of forkUrls) {
       try {
-        return await AnvilHarness.spawnOne(forkUrl, chainId, opts.forkBlock, 120_000);
+        return await AnvilHarness.spawnOne(forkUrl, chainId, opts.forkBlock, perAttemptMs);
       } catch (err) {
         failures.push(`${forkUrl}: ${err instanceof Error ? err.message : String(err)}`);
       }
