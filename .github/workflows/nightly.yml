@@ -25,10 +25,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue create \
-            --title "Nightly live-RPC run failed ($(date -u +%F))" \
-            --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --label nightly-failure || true
+          # One issue per failing tier, not one per night. A sustained outage
+          # used to open a fresh issue every run — 13 duplicates for two root
+          # causes — which buries anything real. Comment on the open one instead.
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          TITLE="Nightly live-RPC run failing"
+          EXISTING=$(gh issue list --state open --label nightly-failure \
+            --search "\"$TITLE\" in:title" --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "Still failing: $RUN_URL" || true
+          else
+            gh issue create --title "$TITLE" --body "Run: $RUN_URL" --label nightly-failure || true
+          fi
   fork:
     runs-on: ubuntu-latest
     steps:
@@ -64,10 +73,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue create \
-            --title "Nightly fork run failed ($(date -u +%F))" \
-            --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --label nightly-failure || true
+          # One issue per failing tier, not one per night. A sustained outage
+          # used to open a fresh issue every run — 13 duplicates for two root
+          # causes — which buries anything real. Comment on the open one instead.
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          TITLE="Nightly fork run failing"
+          EXISTING=$(gh issue list --state open --label nightly-failure \
+            --search "\"$TITLE\" in:title" --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "Still failing: $RUN_URL" || true
+          else
+            gh issue create --title "$TITLE" --body "Run: $RUN_URL" --label nightly-failure || true
+          fi
   testnet:
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -114,7 +132,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue create \
-            --title "Nightly agent-scenarios run failed ($(date -u +%F))" \
-            --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --label nightly-failure || true
+          # One issue per failing tier, not one per night. A sustained outage
+          # used to open a fresh issue every run — 13 duplicates for two root
+          # causes — which buries anything real. Comment on the open one instead.
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          TITLE="Nightly agent-scenarios run failing"
+          EXISTING=$(gh issue list --state open --label nightly-failure \
+            --search "\"$TITLE\" in:title" --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "Still failing: $RUN_URL" || true
+          else
+            gh issue create --title "$TITLE" --body "Run: $RUN_URL" --label nightly-failure || true
+          fi
