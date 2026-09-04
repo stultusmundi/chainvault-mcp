@@ -8,8 +8,50 @@
  * pinned block for free. Override via WORKSTYLE_FORK_URL if needed.
  */
 export const FORK_BLOCK = 23_000_000;
-export const FORK_URL = process.env.WORKSTYLE_FORK_URL ?? 'https://eth.drpc.org';
 export const FORK_ENABLED = process.env.WORKSTYLE_FORK === '1';
+
+/**
+ * Archive endpoints known to serve FORK_BLOCK for free, tried in order.
+ *
+ * A single provider is not enough: these throttle by client IP, and GitHub
+ * runners share egress addresses, so drpc answers instantly from a laptop
+ * while refusing the same request from CI minutes later. anvil then never
+ * becomes ready and the whole suite fails as if the code broke.
+ * WORKSTYLE_FORK_URL overrides the list entirely (e.g. a keyed endpoint).
+ */
+export const FORK_URLS: readonly string[] = process.env.WORKSTYLE_FORK_URL
+  ? [process.env.WORKSTYLE_FORK_URL]
+  : ['https://eth.drpc.org', 'https://eth.merkle.io', 'https://1rpc.io/eth'];
+
+/** First candidate. Kept for callers that just need a default URL. */
+export const FORK_URL = FORK_URLS[0];
+
+/**
+ * Returns the first candidate that actually serves FORK_BLOCK, or null if none
+ * do. Probing up front separates "the free RPC is throttling us" from "our code
+ * is broken" — the suite skips on the former instead of opening a bug.
+ */
+export async function resolveForkUrl(timeoutMs = 10_000): Promise<string | null> {
+  for (const url of FORK_URLS) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'eth_getBlockByNumber',
+          params: ['0x' + FORK_BLOCK.toString(16), false],
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) continue;
+      const body = (await res.json()) as { result?: unknown };
+      if (body.result) return url;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
 
 export const MAINNET = {
   WETH9: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
