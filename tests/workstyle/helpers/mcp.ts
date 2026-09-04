@@ -88,9 +88,12 @@ export async function callToolJson(client: Client, name: string, args: Record<st
   // Write tools return as soon as the tx is broadcast — under anvil >= 1.8 the
   // block is mined asynchronously, so a following read would race the miner.
   // Settle here so every write-then-read test is deterministic on any anvil.
+  // The testnet suite connects with a placeholder harness (there is no local
+  // node), so probe for the method rather than assuming a real AnvilHarness —
+  // those tests wait on the live network themselves.
   const hash = parsed?.hash ?? parsed?.transactionHash;
   const anvil = harnessByClient.get(client);
-  if (anvil && typeof hash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(hash)) {
+  if (typeof anvil?.waitForTx === 'function' && typeof hash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(hash)) {
     await anvil.waitForTx(hash);
   }
   return parsed;
