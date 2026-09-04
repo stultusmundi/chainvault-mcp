@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { parseEther } from 'viem';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerTool } from './register.js';
 import { EvmAdapter } from '../../chain/evm-adapter.js';
 import { getChainConfig } from '../../chain/chains.js';
 import type { AgentContext } from '../context.js';
@@ -54,7 +55,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
   // Tier 2 write tools
   // ---------------------------------------------------------------------------
 
-  server.registerTool(
+  registerTool(server,
     'deploy_contract',
     {
       title: 'Deploy Smart Contract',
@@ -105,7 +106,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
     },
   );
 
-  server.registerTool(
+  registerTool(server,
     'interact_contract',
     {
       title: 'Write to Smart Contract',
@@ -160,7 +161,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
     },
   );
 
-  server.registerTool(
+  registerTool(server,
     'verify_contract',
     {
       title: 'Verify Contract Source',
@@ -228,7 +229,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
   // Tier 1 wired tools
   // ---------------------------------------------------------------------------
 
-  server.registerTool(
+  registerTool(server,
     'get_balance',
     {
       title: 'Get Balance',
@@ -258,7 +259,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
     },
   );
 
-  server.registerTool(
+  registerTool(server,
     'get_contract_state',
     {
       title: 'Read Contract State',
@@ -297,7 +298,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
     },
   );
 
-  server.registerTool(
+  registerTool(server,
     'simulate_transaction',
     {
       title: 'Simulate Transaction',
@@ -353,7 +354,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
     },
   );
 
-  server.registerTool(
+  registerTool(server,
     'get_events',
     {
       title: 'Get Contract Events',
@@ -394,7 +395,7 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
     },
   );
 
-  server.registerTool(
+  registerTool(server,
     'get_transaction',
     {
       title: 'Get Transaction Details',

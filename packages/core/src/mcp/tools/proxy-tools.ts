@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerTool } from './register.js';
 import type { AgentContext } from '../context.js';
 import type { AuditFn } from '../audit-fn.js';
 import { getChainConfig } from '../../chain/chains.js';
@@ -12,7 +13,7 @@ const proxy = new ApiProxy();
 const noop: AuditFn = () => {};
 
 export function registerProxyTools(server: McpServer, getContext: ContextGetter, audit: AuditFn = noop): void {
-  server.registerTool(
+  registerTool(server,
     'query_explorer',
     {
       title: 'Query Block Explorer',
@@ -75,7 +76,7 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
     },
   );
 
-  server.registerTool(
+  registerTool(server,
     'query_price',
     {
       title: 'Get Token Price',

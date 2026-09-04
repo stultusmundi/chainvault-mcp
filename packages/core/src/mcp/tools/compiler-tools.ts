@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerTool } from './register.js';
 import type { AuditFn } from '../audit-fn.js';
 import { compile } from '../../compiler/solidity.js';
 import { sanitizeError } from './sanitize.js';
@@ -7,7 +8,7 @@ import { sanitizeError } from './sanitize.js';
 const noop: AuditFn = () => {};
 
 export function registerCompilerTools(server: McpServer, audit: AuditFn = noop): void {
-  server.registerTool(
+  registerTool(server,
     'compile_contract',
     {
       title: 'Compile Solidity Contract',

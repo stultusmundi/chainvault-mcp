@@ -90,6 +90,41 @@ describe('requestFaucet', () => {
     expect(result.success).toBe(true);
     expect(result.txHash).toBe('0xtxhash');
   });
+
+  it('ignores a non-string txHash from a malformed or hostile faucet', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ txHash: { evil: 'object' } }),
+    });
+
+    const result = await requestFaucet(11155111, '0x1234');
+    expect(result.success).toBe(true);
+    expect(result.txHash).toBeUndefined();
+    // The bogus value must never reach the agent-visible message.
+    expect(result.message).not.toContain('[object Object]');
+  });
+
+  it('ignores a numeric txHash', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ hash: 12345 }),
+    });
+
+    const result = await requestFaucet(11155111, '0x1234');
+    expect(result.success).toBe(true);
+    expect(result.txHash).toBeUndefined();
+  });
+
+  it('handles a non-object JSON body without crashing', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => 'not-an-object',
+    });
+
+    const result = await requestFaucet(11155111, '0x1234');
+    expect(result.success).toBe(true);
+    expect(result.txHash).toBeUndefined();
+  });
 });
 
 describe('getFaucetInfo', () => {

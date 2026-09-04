@@ -11,6 +11,10 @@ MCP server core with vault, rules, chain, proxy, and audit modules.
 - `audit/` — Append-only logger. Standalone, no vault imports
 - `mcp/` — Wires all modules together. Only module allowed to import from all others
 
+## MCP Tool Registration
+
+- Register every tool via the `registerTool` wrapper in `mcp/tools/register.ts`, NEVER `server.registerTool` directly. The SDK's generic infers handler args from the Zod schema and sends type instantiation infinitely deep (`TS2589`), which OOMs `tsc`. The wrapper types the handler itself and contains that inference (issue #33).
+
 ## Encryption Standards
 
 - AES-256-GCM for all encryption (12-byte IV, 16-byte auth tag)

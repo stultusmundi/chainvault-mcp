@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerTool } from './register.js';
 import type { AgentContext } from '../context.js';
 import type { AuditFn } from '../audit-fn.js';
 import { getChainConfig } from '../../chain/chains.js';
@@ -9,7 +10,7 @@ type ContextGetter = () => AgentContext | null;
 const noop: AuditFn = () => {};
 
 export function registerVaultTools(server: McpServer, getContext: ContextGetter, audit: AuditFn = noop): void {
-  server.registerTool(
+  registerTool(server,
     'list_chains',
     {
       title: 'List Accessible Chains',
@@ -41,7 +42,7 @@ export function registerVaultTools(server: McpServer, getContext: ContextGetter,
     },
   );
 
-  server.registerTool(
+  registerTool(server,
     'list_capabilities',
     {
       title: 'List Agent Capabilities',
@@ -68,7 +69,7 @@ export function registerVaultTools(server: McpServer, getContext: ContextGetter,
     },
   );
 
-  server.registerTool(
+  registerTool(server,
     'get_agent_address',
     {
       title: 'Get Agent Wallet Address',

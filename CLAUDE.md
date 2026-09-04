@@ -6,7 +6,7 @@ Secure MCP server gateway between AI agents and EVM blockchains with vault-based
 
 **Build & Type Check:**
 - Build: `npm run build`
-- Type check: `npx tsc --noEmit`
+- Type check: `npm run lint` (`tsc -p tsconfig.check.json --noEmit` — checks both packages; plain `tsc --noEmit` is vacuous here)
 
 **Test Tiers (see CONTRIBUTING.md for details):**
 - Unit (PR gate, offline): `npx vitest run --project unit`

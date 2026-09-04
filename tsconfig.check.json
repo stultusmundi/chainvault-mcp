@@ -1,0 +1,20 @@
+{
+  "//": "Type-check-only config. Compiles both packages in a single non-composite pass with no emit, resolving @chainvault/core from source via the path mapping. Used by `npm run lint` and CI — see issue #33. Do NOT use for building (esbuild does that).",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@chainvault/core": ["./packages/core/src/index.ts"]
+    }
+  },
+  "include": ["packages/core/src/**/*", "packages/cli/src/**/*"]
+}

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerTool } from './register.js';
 import type { AuditFn } from '../audit-fn.js';
 import type { AgentContext } from '../context.js';
 import { SUPPORTED_CHAINS, getChainConfig, getChainsWithFaucets } from '../../chain/chains.js';
@@ -10,7 +11,7 @@ const noop: AuditFn = () => {};
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
 export function registerChainRegistryTools(server: McpServer, getContext: ContextGetter, audit: AuditFn = noop): void {
-  server.registerTool(
+  registerTool(server,
     'list_supported_chains',
     {
       title: 'List Supported Chains',
@@ -44,7 +45,7 @@ export function registerChainRegistryTools(server: McpServer, getContext: Contex
     },
   );
 
-  server.registerTool(
+  registerTool(server,
     'request_faucet',
     {
       title: 'Request Testnet Funds',

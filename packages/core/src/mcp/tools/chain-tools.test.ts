@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerChainTools, sanitizeError } from './chain-tools.js';
 import type { AgentContext } from '../context.js';
+import type { SimulateResult } from '../../chain/types.js';
 
-const writeContractMock = vi.fn(async () => ({ hash: '0xWriteTxHash' }));
-const simulateTransactionMock = vi.fn(async () => ({ success: true, result: null }));
+// Typed to the adapter params the handlers actually pass, so `.mock.calls`
+// carries real argument types (otherwise the args tuple infers as `[]`).
+const writeContractMock = vi.fn(async (_params: { value?: string }) => ({ hash: '0xWriteTxHash' }));
+const simulateTransactionMock = vi.fn(
+  async (_params: { value?: string }): Promise<SimulateResult> => ({ success: true, result: null }),
+);
 
 vi.mock('../../chain/evm-adapter.js', () => ({
   EvmAdapter: {
