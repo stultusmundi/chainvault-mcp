@@ -122,6 +122,26 @@ export class AnvilHarness {
     await this.rpc('anvil_impersonateAccount', [address]);
   }
 
+  /**
+   * Waits until a transaction has a receipt.
+   *
+   * anvil >= 1.8 mines auto-mined transactions asynchronously: the block is
+   * produced on a later tick, so `eth_sendRawTransaction` can return a hash
+   * before the transaction is in a block. Any "write, then immediately read"
+   * assertion then races the miner and sees pre-write state (anvil <= 1.7.1
+   * mined synchronously, which is why these suites were green before).
+   * Polling the receipt makes the tests correct on both.
+   */
+  async waitForTx(hash: string, timeoutMs = 15_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const receipt = await this.rpc<unknown>('eth_getTransactionReceipt', [hash]);
+      if (receipt !== null && receipt !== undefined) return;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    throw new Error(`transaction ${hash} was not mined within ${timeoutMs}ms`);
+  }
+
   async stop(): Promise<void> {
     if (this.proc.exitCode !== null) return;
     const exited = new Promise<void>((resolve) => this.proc.once('exit', () => resolve()));
