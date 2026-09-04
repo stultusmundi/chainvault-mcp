@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — 2026-09-04
 
 Security hardening (from a verification pass over the March review backlog):
 
@@ -35,6 +35,28 @@ limit-semantics decision left for a follow-up.
 - **Private key normalization:** the vault (`MasterVault.addKey`) now accepts a
   raw 64-hex private key without the `0x` prefix and normalizes it, instead of
   throwing an opaque viem error.
+
+### Tooling & CI
+
+- **Type-check is real again (#33):** `npm run lint` previously ran
+  `tsc --noEmit`, which resolved to zero input files and passed vacuously.
+  It now runs two dedicated configs covering both packages, the root `tests/`
+  trees and `vitest.config.ts` — 89 source and 53 test files. The OOM that
+  forced the check to be disabled is contained by a typed `registerTool`
+  wrapper (`mcp/tools/register.ts`), which performs the Zod inference itself so
+  the MCP SDK's unbounded generic is never instantiated. All tool registrations
+  must go through it.
+- **anvil 1.8 compatibility:** anvil 1.8 mines auto-mined transactions
+  asynchronously, so a write tool can return a hash before the block exists.
+  Every "write then immediately read" assertion in the workstyle and fork
+  suites raced the miner. The harness now waits for the receipt. Product
+  behaviour is unchanged — returning a hash without blocking is correct.
+- **Deterministic toolchain:** CI pins foundry to `v1.8.1` instead of tracking
+  `stable`, so an upstream release can no longer redden the build unannounced.
+- **Fork suite resilience:** the fork tier probes several archive endpoints,
+  falls back across them when anvil cannot complete a fork, and skips with a
+  warning when they all throttle — instead of failing the nightly and filing an
+  issue for a third-party outage.
 
 ## 1.0.1 — 2026-07-20
 
