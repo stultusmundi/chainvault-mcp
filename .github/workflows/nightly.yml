@@ -39,7 +39,11 @@ jobs:
           cache: npm
       - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
         with:
-          version: stable
+          # Pinned, not `stable`: anvil 1.8 changed auto-mining to be async and
+          # silently reddened the workstyle gate and the nightly fork run for 9
+          # days with no code change (#49). Toolchain upgrades should be a
+          # deliberate commit, not a surprise from a scheduled run.
+          version: v1.8.1
       - name: Install solc 0.8.24 (static binary)
         run: |
           curl -sSL -o /usr/local/bin/solc \
@@ -92,7 +96,11 @@ jobs:
           cache: npm
       - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
         with:
-          version: stable
+          # Pinned, not `stable`: anvil 1.8 changed auto-mining to be async and
+          # silently reddened the workstyle gate and the nightly fork run for 9
+          # days with no code change (#49). Toolchain upgrades should be a
+          # deliberate commit, not a surprise from a scheduled run.
+          version: v1.8.1
       # No solc install here: compile_contract resolves Docker first (present
       # on ubuntu-latest runners) and only falls back to a local solc binary.
       - run: npm ci
