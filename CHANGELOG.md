@@ -19,6 +19,23 @@ Security hardening (from a verification pass over the March review backlog):
 Deferred: #13 part B (counting deploy gas against spend limits) is a
 limit-semantics decision left for a follow-up.
 
+### Etherscan V2 & key handling
+
+- **Etherscan V2 migration:** `query_explorer` and `verify_contract` now call
+  the unified Etherscan V2 endpoint (`https://api.etherscan.io/v2/api`) with a
+  `chainid` parameter instead of the deprecated per-chain V1 hosts
+  (api-sepolia.etherscan.io, api.polygonscan.com, ...), which Etherscan has shut
+  down. A single Etherscan API key now serves every supported chain — and the 7
+  chains that previously had no explorer API (e.g. Base/Arbitrum/Optimism
+  Sepolia, Amoy, Fuji) gain one. **Migration:** agents provisioned with a
+  per-chain key (PolygonScan, Arbiscan, ...) must be re-keyed with a single
+  `etherscan` key — the per-chain hosts no longer work. Explorer key matching
+  is also tightened to registrable-domain equality (a key under a look-alike
+  domain like `foo.etherscan.io.evil.com` no longer matches).
+- **Private key normalization:** the vault (`MasterVault.addKey`) now accepts a
+  raw 64-hex private key without the `0x` prefix and normalizes it, instead of
+  throwing an opaque viem error.
+
 ## 1.0.1 — 2026-07-20
 
 - **Packaging:** CLI published as `@chainvault/mcp` (scoped; was `chainvault-mcp`).

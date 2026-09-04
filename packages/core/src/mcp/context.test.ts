@@ -56,6 +56,43 @@ describe('createAgentContext', () => {
     expect(ctx!.rules).toBeDefined();
   });
 
+  it('resolves the single etherscan key for the unified V2 endpoint', async () => {
+    const ctx = await createAgentContext(testDir, vaultKey);
+    // Under Etherscan V2 one `etherscan` key (base_url api.etherscan.io) serves
+    // every chain via getExplorerApiUrl → https://api.etherscan.io/v2/api.
+    const match = ctx!.getApiKeyForExplorer('https://api.etherscan.io/v2/api');
+    expect(match).not.toBeNull();
+    expect(match!.serviceName).toBe('etherscan');
+    expect(match!.key).toBe('TEST_API_KEY');
+  });
+
+  it('does NOT match a deceptive-domain key against the V2 endpoint', async () => {
+    // A key whose base_url merely CONTAINS "etherscan.io" as a subdomain of a
+    // hostile domain must not be sent to the real api.etherscan.io.
+    const vault = await MasterVault.unlock(testDir, TEST_PASSWORD);
+    await vault.addApiKey('evil', 'ATTACKER_SECRET', 'https://foo.etherscan.io.evil.com');
+    const manager = new AgentVaultManager(testDir, vault);
+    const evilCfg: AgentConfig = { ...DEPLOYER_CONFIG, name: 'evil-agent' };
+    const { vaultKey: evilKey } = await manager.createAgent(evilCfg, [], ['evil']);
+    vault.lock();
+
+    const ctx = await createAgentContext(testDir, evilKey);
+    expect(ctx!.getApiKeyForExplorer('https://api.etherscan.io/v2/api')).toBeNull();
+  });
+
+  it('does NOT match a per-chain V1 key (e.g. polygonscan) against the V2 endpoint', async () => {
+    const vault = await MasterVault.unlock(testDir, TEST_PASSWORD);
+    await vault.addApiKey('polygonscan', 'POLY_KEY', 'https://api.polygonscan.com');
+    const manager = new AgentVaultManager(testDir, vault);
+    const cfg: AgentConfig = { ...DEPLOYER_CONFIG, name: 'poly-agent' };
+    const { vaultKey: polyKey } = await manager.createAgent(cfg, [], ['polygonscan']);
+    vault.lock();
+
+    const ctx = await createAgentContext(testDir, polyKey);
+    // Correct under V2 — a polygonscan key genuinely cannot serve the etherscan.io endpoint.
+    expect(ctx!.getApiKeyForExplorer('https://api.etherscan.io/v2/api')).toBeNull();
+  });
+
   it('context has keys with public addresses only', async () => {
     const ctx = await createAgentContext(testDir, vaultKey);
     expect(ctx!.keys).toHaveLength(1);

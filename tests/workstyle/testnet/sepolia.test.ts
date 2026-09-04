@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createPublicClient, http, formatEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { normalizePrivateKey } from '@chainvault/core';
 import { compileCorpusContract, compilerAvailable } from '../helpers/corpus.js';
 import { createVaultFixture, type VaultFixture } from '../helpers/vault-fixture.js';
 import { connectMcp, callToolJson, callToolText, type WorkstyleMcp } from '../helpers/mcp.js';
@@ -10,10 +11,13 @@ const SEPOLIA = 11155111;
 const SEPOLIA_RPC = process.env.TESTNET_RPC_URL ?? 'https://ethereum-sepolia-rpc.publicnode.com';
 const MIN_BALANCE_ETH = 0.02;
 
-const key = process.env.TESTNET_PRIVATE_KEY;
+// Accept a raw 64-hex key (no 0x) from the env — normalize the same way the vault does.
+const key = process.env.TESTNET_PRIVATE_KEY
+  ? normalizePrivateKey(process.env.TESTNET_PRIVATE_KEY)
+  : undefined;
 let funded = false;
 if (key) {
-  const account = privateKeyToAccount(key as `0x${string}`);
+  const account = privateKeyToAccount(key);
   const client = createPublicClient({ transport: http(SEPOLIA_RPC) });
   try {
     const balance = await client.getBalance({ address: account.address });
@@ -36,7 +40,8 @@ describe.skipIf(!ready)('Sepolia live smoke', () => {
       chainId: SEPOLIA,
       keys: { 'testnet-key': { privateKey: key!, chains: [SEPOLIA] } },
       apiKeys: process.env.ETHERSCAN_API_KEY
-        ? { etherscan: { key: process.env.ETHERSCAN_API_KEY, baseUrl: 'https://api-sepolia.etherscan.io' } }
+        // One Etherscan V2 key serves every chain via the unified endpoint.
+        ? { etherscan: { key: process.env.ETHERSCAN_API_KEY, baseUrl: 'https://api.etherscan.io' } }
         : {},
       agents: [{
         name: 'testnet-agent',
@@ -71,12 +76,19 @@ describe.skipIf(!ready)('Sepolia live smoke', () => {
   });
 
   it('interacts and reads events back', async () => {
-    const account = privateKeyToAccount(key! as `0x${string}`);
+    const account = privateKeyToAccount(key!);
     const write = await callToolJson(mcp.client, 'interact_contract', {
       chain_id: SEPOLIA, address: tokenAddress, abi: tokenAbi,
       function_name: 'transfer', args: [account.address, '1'],
     });
     expect(write.hash).toMatch(/^0x/);
+    // The tx is broadcast but not necessarily mined yet — wait for the receipt
+    // before asking the tool for it, or get_transaction races the network.
+    const publicClient = createPublicClient({ transport: http(SEPOLIA_RPC) });
+    await publicClient.waitForTransactionReceipt({
+      hash: write.hash as `0x${string}`,
+      timeout: 120_000,
+    });
     const tx = await callToolJson(mcp.client, 'get_transaction', {
       chain_id: SEPOLIA, hash: write.hash,
     });
@@ -99,9 +111,12 @@ describe.skipIf(!ready)('Sepolia live smoke', () => {
     expect(text.toLowerCase()).toMatch(/guid|pending|submitted|verified|ok/);
   });
 
-  it.skipIf(!process.env.ETHERSCAN_API_KEY)('query_explorer fetches the deploy tx through the vault API key', async () => {
+  it.skipIf(!process.env.ETHERSCAN_API_KEY)('query_explorer fetches the deploy receipt through the vault API key', async () => {
+    // Query the receipt, not the transaction: a contract-creation tx has
+    // `to: null` and does not contain the deployed address — that only appears
+    // as `contractAddress` in the receipt.
     const text = await callToolText(mcp.client, 'query_explorer', {
-      chain_id: SEPOLIA, module: 'proxy', action: 'eth_getTransactionByHash',
+      chain_id: SEPOLIA, module: 'proxy', action: 'eth_getTransactionReceipt',
       params: { txhash: deployHash },
     });
     expect(text.toLowerCase()).toContain(tokenAddress.toLowerCase().slice(2, 10));

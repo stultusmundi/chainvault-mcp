@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import type { AgentContext } from '../context.js';
 import type { AuditFn } from '../audit-fn.js';
-import { getChainConfig } from '../../chain/chains.js';
+import { getExplorerApiUrl } from '../../chain/chains.js';
 import { ApiProxy } from '../../proxy/api-proxy.js';
 import { sanitizeError } from './sanitize.js';
 
@@ -32,19 +32,19 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
         return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
       }
 
-      // Find explorer API URL from chain config
-      const chainConfig = getChainConfig(chain_id);
-      if (!chainConfig?.blockExplorer?.apiUrl) {
+      // Every supported chain is served by the unified Etherscan V2 endpoint;
+      // the chain is selected with the chainid param below.
+      const explorerApiUrl = getExplorerApiUrl(chain_id);
+      if (!explorerApiUrl) {
         audit({ action: 'query_explorer', chain_id, status: 'denied', details: 'No explorer API for chain' });
         return { content: [{ type: 'text' as const, text: `No block explorer API configured for chain ${chain_id}.` }] };
       }
 
       // Find API key matching this explorer via controlled accessor
-      const explorerApiUrl = chainConfig.blockExplorer.apiUrl;
       const apiKeyMatch = ctx.getApiKeyForExplorer(explorerApiUrl);
       if (!apiKeyMatch) {
         audit({ action: 'query_explorer', chain_id, status: 'denied', details: 'No API key for explorer' });
-        return { content: [{ type: 'text' as const, text: `No API key configured for ${chainConfig.blockExplorer.name}. Add one via the TUI or CLI.` }] };
+        return { content: [{ type: 'text' as const, text: `No Etherscan API key configured for chain ${chain_id}. Add a single 'etherscan' key — Etherscan V2 covers every chain — via the TUI or CLI.` }] };
       }
       const { serviceName, key: apiKeyValue } = apiKeyMatch;
 
@@ -61,9 +61,13 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
       try {
         const result = await proxy.request({
           agentId: ctx.agentName,
+          // explorerApiUrl already includes the /v2/api path.
           baseUrl: explorerApiUrl,
-          endpoint: '/api',
-          params: { module: mod, action, ...(extraParams ?? {}) },
+          endpoint: '',
+          // Spread agent-supplied params FIRST so the trusted chainid/module/
+          // action (the ones the rules engine checked) always win and can't be
+          // overridden by a crafted `params` entry.
+          params: { ...(extraParams ?? {}), chainid: String(chain_id), module: mod, action },
           apiKey: apiKeyValue,
           rateLimits,
         });
