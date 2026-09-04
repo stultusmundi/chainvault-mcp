@@ -3,7 +3,7 @@ import { encodeFunctionData } from 'viem';
 import { anvilAvailable, ANVIL_ACCOUNTS } from '../helpers/anvil.js';
 import { compileCorpusContract, compilerAvailable } from '../helpers/corpus.js';
 import { startWorkstyleMcp, callToolJson, type WorkstyleMcp } from '../helpers/mcp.js';
-import { FORK_BLOCK, FORK_ENABLED, resolveForkUrl, MAINNET, WETH_ABI, ERC20_MIN_ABI, QUOTER_V1_ABI } from './fork-targets.js';
+import { FORK_BLOCK, FORK_ENABLED, FORK_URLS, resolveForkUrl, MAINNET, WETH_ABI, ERC20_MIN_ABI, QUOTER_V1_ABI } from './fork-targets.js';
 
 // Probe the archive endpoints before committing to a run: if every free
 // provider is throttling this IP, that is an infrastructure outage, not a
@@ -20,7 +20,12 @@ describe.skipIf(!ready)('real mainnet protocols on an anvil fork', () => {
 
   beforeAll(async () => {
     mcp = await startWorkstyleMcp({
-      anvil: { forkUrl: forkUrl!, forkBlock: FORK_BLOCK },
+      // Probe order first, then the rest: a reachable probe does not
+      // guarantee the endpoint can carry anvil's fork burst.
+      anvil: {
+        forkUrls: [forkUrl!, ...FORK_URLS.filter((u) => u !== forkUrl)],
+        forkBlock: FORK_BLOCK,
+      },
       chainId: CHAIN,
       agents: [{ name: 'forker', chains: [CHAIN] }],
     });
