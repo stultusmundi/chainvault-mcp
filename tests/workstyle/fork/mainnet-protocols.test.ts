@@ -64,7 +64,7 @@ describe.skipIf(!ready)('real mainnet protocols on an anvil fork', () => {
   it('USDT non-standard returns do not break approve/transfer handling', async () => {
     // Fund the agent with real USDT from an impersonated whale
     await mcp.anvil.impersonate(MAINNET.WHALE);
-    await mcp.anvil.rpc('eth_sendTransaction', [{
+    const fundHash = await mcp.anvil.rpc<string>('eth_sendTransaction', [{
       from: MAINNET.WHALE,
       to: MAINNET.USDT,
       data: encodeFunctionData({
@@ -72,6 +72,8 @@ describe.skipIf(!ready)('real mainnet protocols on an anvil fork', () => {
         args: [ANVIL_ACCOUNTS[0].address, 1_000_000_000n], // 1000 USDT (6 decimals)
       }),
     }]);
+    // Raw RPC send, so it bypasses the settling done by callToolJson.
+    await mcp.anvil.waitForTx(fundHash);
 
     const usdtAbi = JSON.stringify(ERC20_MIN_ABI);
     const approve = await callToolJson(mcp.client, 'interact_contract', {
