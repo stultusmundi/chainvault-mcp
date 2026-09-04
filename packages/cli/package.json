@@ -1,6 +1,6 @@
 {
   "name": "@chainvault/mcp",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "ChainVault MCP CLI and TUI",
   "type": "module",
   "publishConfig": {
@@ -24,7 +24,7 @@
     "prepublishOnly": "cd ../.. && npm run build"
   },
   "dependencies": {
-    "@chainvault/core": "^1.0.1",
+    "@chainvault/core": "^1.1.0",
     "commander": "^13.0.0",
     "ink": "^5.2.0",
     "ink-select-input": "^6.2.0",
