@@ -53,9 +53,10 @@ limit-semantics decision left for a follow-up.
   behaviour is unchanged — returning a hash without blocking is correct.
 - **Deterministic toolchain:** CI pins foundry to `v1.8.1` instead of tracking
   `stable`, so an upstream release can no longer redden the build unannounced.
-- **Fork suite resilience:** the fork tier probes several archive endpoints and
-  skips with a warning when they all throttle, instead of failing the nightly
-  and filing an issue for a third-party outage.
+- **Fork suite resilience:** the fork tier probes several archive endpoints,
+  falls back across them when anvil cannot complete a fork, and skips with a
+  warning when they all throttle — instead of failing the nightly and filing an
+  issue for a third-party outage.
 
 ## 1.0.1 — 2026-07-20
 
