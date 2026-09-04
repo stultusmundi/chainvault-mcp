@@ -3,9 +3,16 @@ import { encodeFunctionData } from 'viem';
 import { anvilAvailable, ANVIL_ACCOUNTS } from '../helpers/anvil.js';
 import { compileCorpusContract, compilerAvailable } from '../helpers/corpus.js';
 import { startWorkstyleMcp, callToolJson, type WorkstyleMcp } from '../helpers/mcp.js';
-import { FORK_BLOCK, FORK_URL, FORK_ENABLED, MAINNET, WETH_ABI, ERC20_MIN_ABI, QUOTER_V1_ABI } from './fork-targets.js';
+import { FORK_BLOCK, FORK_ENABLED, resolveForkUrl, MAINNET, WETH_ABI, ERC20_MIN_ABI, QUOTER_V1_ABI } from './fork-targets.js';
 
-const ready = FORK_ENABLED && anvilAvailable() && (await compilerAvailable());
+// Probe the archive endpoints before committing to a run: if every free
+// provider is throttling this IP, that is an infrastructure outage, not a
+// regression, so skip rather than fail the nightly and open an issue.
+const forkUrl = FORK_ENABLED ? await resolveForkUrl() : null;
+if (FORK_ENABLED && !forkUrl) {
+  console.warn('[fork] no archive RPC served the pinned block — skipping the fork suite');
+}
+const ready = FORK_ENABLED && forkUrl !== null && anvilAvailable() && (await compilerAvailable());
 const CHAIN = 1; // fork keeps mainnet chain id
 
 describe.skipIf(!ready)('real mainnet protocols on an anvil fork', () => {
@@ -13,7 +20,7 @@ describe.skipIf(!ready)('real mainnet protocols on an anvil fork', () => {
 
   beforeAll(async () => {
     mcp = await startWorkstyleMcp({
-      anvil: { forkUrl: FORK_URL, forkBlock: FORK_BLOCK },
+      anvil: { forkUrl: forkUrl!, forkBlock: FORK_BLOCK },
       chainId: CHAIN,
       agents: [{ name: 'forker', chains: [CHAIN] }],
     });
@@ -31,7 +38,9 @@ describe.skipIf(!ready)('real mainnet protocols on an anvil fork', () => {
   });
 
   afterAll(async () => {
-    await mcp.close();
+    // beforeAll can fail before mcp is assigned (anvil never becoming ready,
+    // say); guard so the teardown error does not mask the real one.
+    if (mcp) await mcp.close();
   });
 
   it('routes chain 1 through the vault RPC endpoint (fork), not the public registry', async () => {
