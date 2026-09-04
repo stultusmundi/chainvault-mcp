@@ -50,6 +50,13 @@ function freePort(): Promise<number> {
 
 export interface AnvilOptions {
   forkUrl?: string;
+  /**
+   * Fork endpoints to try in order. A free archive endpoint can answer a single
+   * probe and still throttle the burst of requests anvil makes while forking,
+   * so one reachable URL is not proof it can carry a run — fall through to the
+   * next instead of failing. Takes precedence over `forkUrl`.
+   */
+  forkUrls?: readonly string[];
   forkBlock?: number;
   chainId?: number;
 }
@@ -66,18 +73,41 @@ export class AnvilHarness {
   }
 
   static async start(opts: AnvilOptions = {}): Promise<AnvilHarness> {
-    const port = await freePort();
+    const forkUrls = opts.forkUrls ?? (opts.forkUrl ? [opts.forkUrl] : []);
     // Fork mode keeps the origin chain id (e.g. 1) unless overridden.
-    const chainId = opts.chainId ?? (opts.forkUrl ? 1 : ANVIL_CHAIN_ID);
+    const chainId = opts.chainId ?? (forkUrls.length > 0 ? 1 : ANVIL_CHAIN_ID);
+
+    if (forkUrls.length === 0) {
+      return AnvilHarness.spawnOne(undefined, chainId, opts.forkBlock, 15_000);
+    }
+
+    const failures: string[] = [];
+    for (const forkUrl of forkUrls) {
+      try {
+        return await AnvilHarness.spawnOne(forkUrl, chainId, opts.forkBlock, 120_000);
+      } catch (err) {
+        failures.push(`${forkUrl}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    throw new Error(`no fork endpoint could start anvil —\n  ${failures.join('\n  ')}`);
+  }
+
+  private static async spawnOne(
+    forkUrl: string | undefined,
+    chainId: number,
+    forkBlock: number | undefined,
+    timeoutMs: number,
+  ): Promise<AnvilHarness> {
+    const port = await freePort();
     const args = ['--port', String(port), '--silent'];
-    if (!opts.forkUrl) args.push('--chain-id', String(chainId));
-    if (opts.forkUrl) {
-      args.push('--fork-url', opts.forkUrl);
-      if (opts.forkBlock) args.push('--fork-block-number', String(opts.forkBlock));
+    if (!forkUrl) args.push('--chain-id', String(chainId));
+    if (forkUrl) {
+      args.push('--fork-url', forkUrl);
+      if (forkBlock) args.push('--fork-block-number', String(forkBlock));
     }
     const proc = spawn('anvil', args, { stdio: 'ignore' });
     const harness = new AnvilHarness(proc, `http://127.0.0.1:${port}`, chainId);
-    await harness.waitReady(opts.forkUrl ? 60_000 : 15_000);
+    await harness.waitReady(timeoutMs);
     return harness;
   }
 
