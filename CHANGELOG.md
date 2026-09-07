@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **`verify_contract` access control (#11):** the tool checked only that an
+  agent context existed. It now runs the same two gates as every other tool —
+  chain access, then the API endpoint whitelist — and submits through `ApiProxy`
+  instead of a bare `fetch`, so verification counts against the agent's rate
+  limit and usage totals. Previously an agent scoped to Sepolia could verify on
+  mainnet, and could submit verifications without limit.
+- `ApiProxy` gained POST support. POST responses are never cached (a
+  verification submission is not a lookup), and the API key travels in the
+  form body rather than the query string, keeping it out of URL logs.
+- All tools now share one `ApiProxy` instance. A per-tool proxy handed each
+  agent a fresh rate-limit allowance per tool.
+
 ## 1.1.0 — 2026-09-04
 
 Security hardening (from a verification pass over the March review backlog):

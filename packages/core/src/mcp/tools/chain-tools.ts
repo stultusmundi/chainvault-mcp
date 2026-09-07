@@ -3,6 +3,7 @@ import { parseEther } from 'viem';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTool } from './register.js';
 import { EvmAdapter } from '../../chain/evm-adapter.js';
+import { apiProxy } from './shared-proxy.js';
 import { getExplorerApiUrl } from '../../chain/chains.js';
 import type { AgentContext } from '../context.js';
 import type { AuditFn } from '../audit-fn.js';
@@ -24,6 +25,9 @@ export { sanitizeError };
 export function toJson(value: unknown): string {
   return JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
 }
+
+/** Etherscan action name, and the endpoint the whitelist is checked against. */
+const VERIFY_ACTION = 'verifysourcecode';
 
 function checkChainAccess(ctx: AgentContext | null, chainId: number): string | null {
   if (!ctx) return 'No agent context. Set CHAINVAULT_VAULT_KEY.';
@@ -177,9 +181,13 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
     },
     async ({ chain_id, address, source_code, contract_name, compiler_version, optimization }) => {
       const ctx = getContext();
-      if (!ctx) {
-        audit({ action: 'verify_contract', chain_id, status: 'denied', details: 'No agent context' });
-        return { content: [{ type: 'text' as const, text: 'No agent context. Set CHAINVAULT_VAULT_KEY.' }] };
+      // Verification touches a chain and spends a paid API quota, so it goes
+      // through the same two gates as every other tool: chain access first,
+      // then the API endpoint whitelist below.
+      const accessErr = checkChainAccess(ctx, chain_id);
+      if (accessErr) {
+        audit({ action: 'verify_contract', chain_id, status: 'denied', details: accessErr });
+        return { content: [{ type: 'text' as const, text: accessErr }] };
       }
 
       // Every supported chain is served by the unified Etherscan V2 endpoint;
@@ -191,33 +199,45 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       }
 
       // Find an API key for this explorer via controlled accessor
-      const apiKeyMatch = ctx.getApiKeyForExplorer(explorerApiUrl);
+      const apiKeyMatch = ctx!.getApiKeyForExplorer(explorerApiUrl);
       if (!apiKeyMatch) {
         audit({ action: 'verify_contract', chain_id, status: 'denied', details: 'No API key for explorer' });
         return { content: [{ type: 'text' as const, text: `No Etherscan API key configured for chain ${chain_id}. Add a single 'etherscan' key — Etherscan V2 covers every chain — via the TUI or CLI.` }] };
       }
 
-      try {
-        const params = new URLSearchParams({
-          chainid: String(chain_id),
-          apikey: apiKeyMatch.key,
-          module: 'contract',
-          action: 'verifysourcecode',
-          contractaddress: address,
-          sourceCode: source_code,
-          codeformat: 'solidity-single-file',
-          contractname: contract_name,
-          compilerversion: `v${compiler_version}`,
-          optimizationUsed: optimization ? '1' : '0',
-        });
+      // Check the API endpoint whitelist, exactly as query_explorer does.
+      const apiCheck = ctx!.rules.checkApiRequest({
+        service: apiKeyMatch.serviceName,
+        endpoint: VERIFY_ACTION,
+      });
+      if (!apiCheck.approved) {
+        audit({ action: 'verify_contract', chain_id, status: 'denied', details: apiCheck.reason ?? 'API access denied' });
+        return { content: [{ type: 'text' as const, text: apiCheck.reason ?? 'API access denied.' }] };
+      }
 
-        // explorerApiUrl already includes the /v2/api path.
-        const response = await fetch(explorerApiUrl, {
+      try {
+        // Through the proxy, not a bare fetch: verification then counts against
+        // the agent's rate limit and usage totals like any other API call.
+        const data = await apiProxy.request({
+          agentId: ctx!.agentName,
+          // explorerApiUrl already includes the /v2/api path.
+          baseUrl: explorerApiUrl,
+          endpoint: '',
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
+          params: {
+            chainid: String(chain_id),
+            module: 'contract',
+            action: VERIFY_ACTION,
+            contractaddress: address,
+            sourceCode: source_code,
+            codeformat: 'solidity-single-file',
+            contractname: contract_name,
+            compilerversion: `v${compiler_version}`,
+            optimizationUsed: optimization ? '1' : '0',
+          },
+          apiKey: apiKeyMatch.key,
+          rateLimits: ctx!.config.api_access?.[apiKeyMatch.serviceName]?.rate_limit,
         });
-        const data = await response.json();
         audit({ action: 'verify_contract', chain_id, status: 'approved', details: `Verified ${contract_name}` });
         return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
       } catch (e: unknown) {
