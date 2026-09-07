@@ -9,12 +9,25 @@ const writeContractMock = vi.fn(async (_params: { value?: string }) => ({ hash: 
 const simulateTransactionMock = vi.fn(
   async (_params: { value?: string }): Promise<SimulateResult> => ({ success: true, result: null }),
 );
+const deployContractMock = vi.fn(async (_params: unknown) => ({
+  hash: '0xDeployTxHash',
+  address: '0xDeployedAddress',
+  gasUsed: '1000000',
+  gasCostEth: '0.02',
+}));
+const estimateDeployCostMock = vi.fn(async (_params: unknown) => ({
+  gasLimit: '1500000',
+  gasPriceGwei: '20',
+  estimatedCostEth: '0.03',
+}));
 
 vi.mock('../../chain/evm-adapter.js', () => ({
   EvmAdapter: {
     fromChainId: vi.fn(() => ({
       writeContract: writeContractMock,
       simulateTransaction: simulateTransactionMock,
+      deployContract: deployContractMock,
+      estimateDeployCost: estimateDeployCostMock,
     })),
   },
 }));
@@ -38,6 +51,7 @@ function createApprovedContext(): AgentContext {
       checkTxRequest: () => ({ approved: true }),
       checkApiRequest: () => ({ approved: true }),
       recordSpend: vi.fn(),
+      hasSpendLimits: () => false,
     } as unknown as AgentContext['rules'],
     keys: [{ name: 'k', address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', chains: [11155111] }],
     getPrivateKeyForChain: () => '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
@@ -339,5 +353,100 @@ describe('verify_contract access control', () => {
 
     expect(res.content[0].text).toMatch(/rate limit exceeded/i);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('deploy_contract spend accounting', () => {
+  const DEPLOY_ARGS = {
+    chain_id: 11155111,
+    abi: '[{"inputs":[],"stateMutability":"nonpayable","type":"constructor"}]',
+    bytecode: '0x608060405260405161083e',
+  };
+
+  beforeEach(() => {
+    deployContractMock.mockClear();
+    estimateDeployCostMock.mockClear();
+    estimateDeployCostMock.mockResolvedValue({
+      gasLimit: '1500000',
+      gasPriceGwei: '20',
+      estimatedCostEth: '0.03',
+    });
+  });
+
+  it('records the actual gas cost of the deploy, not zero', async () => {
+    const server = createFakeServer();
+    const ctx = createApprovedContext();
+    registerChainTools(server as any, () => ctx);
+
+    await server.handlers.get('deploy_contract')!(DEPLOY_ARGS);
+
+    expect(ctx.rules.recordSpend).toHaveBeenCalledWith(11155111, 0.02);
+  });
+
+  it('skips cost estimation when the chain has no spend limits', async () => {
+    const server = createFakeServer();
+    const ctx = createApprovedContext();
+    registerChainTools(server as any, () => ctx);
+
+    await server.handlers.get('deploy_contract')!(DEPLOY_ARGS);
+
+    expect(estimateDeployCostMock).not.toHaveBeenCalled();
+  });
+
+  it('checks the estimated cost against limits before signing', async () => {
+    const server = createFakeServer();
+    const ctx = createApprovedContext();
+    const checked: Array<{ type: string; value: string }> = [];
+    ctx.rules = {
+      checkTxRequest: (req: { type: string; value: string }) => {
+        checked.push({ type: req.type, value: req.value });
+        return { approved: true };
+      },
+      recordSpend: vi.fn(),
+      hasSpendLimits: () => true,
+    } as unknown as AgentContext['rules'];
+    registerChainTools(server as any, () => ctx);
+
+    await server.handlers.get('deploy_contract')!(DEPLOY_ARGS);
+
+    expect(estimateDeployCostMock).toHaveBeenCalled();
+    expect(checked.some((c) => c.type === 'deploy' && c.value === '0.03')).toBe(true);
+  });
+
+  it('denies the deploy when the estimated cost exceeds the limit', async () => {
+    const server = createFakeServer();
+    const ctx = createApprovedContext();
+    ctx.rules = {
+      // Approve the zero-value gate, deny once the real estimate is known.
+      checkTxRequest: (req: { value: string }) =>
+        req.value === '0'
+          ? { approved: true }
+          : { approved: false, reason: 'Value 0.03 exceeds per-tx limit of 0.01' },
+      recordSpend: vi.fn(),
+      hasSpendLimits: () => true,
+    } as unknown as AgentContext['rules'];
+    registerChainTools(server as any, () => ctx);
+
+    const res = await server.handlers.get('deploy_contract')!(DEPLOY_ARGS);
+
+    expect(res.content[0].text).toContain('exceeds per-tx limit');
+    expect(deployContractMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the estimate is unavailable and a limit applies', async () => {
+    const server = createFakeServer();
+    const ctx = createApprovedContext();
+    ctx.rules = {
+      checkTxRequest: () => ({ approved: true }),
+      recordSpend: vi.fn(),
+      hasSpendLimits: () => true,
+    } as unknown as AgentContext['rules'];
+    estimateDeployCostMock.mockRejectedValue(new Error('rpc down'));
+    registerChainTools(server as any, () => ctx);
+
+    const res = await server.handlers.get('deploy_contract')!(DEPLOY_ARGS);
+
+    expect(res.content[0].text).toMatch(/estimate/i);
+    expect(deployContractMock).not.toHaveBeenCalled();
   });
 });
