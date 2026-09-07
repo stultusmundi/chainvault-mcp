@@ -13,6 +13,15 @@
   form body rather than the query string, keeping it out of URL logs.
 - All tools now share one `ApiProxy` instance. A per-tool proxy handed each
   agent a fresh rate-limit allowance per tool.
+- **Deploy gas counts against spend limits (#13 part B):** `deploy_contract`
+  recorded a hardcoded spend of `0`, so deployments — whose entire cost is gas —
+  never touched an agent's limits. The adapter now reports `gasUsed` and
+  `gasCostEth` from the receipt, and the tool charges that amount.
+  When the target chain has a finite limit configured, the cost is also
+  estimated from the agent's *public* address and checked before the private key
+  is fetched, making the limit preventive rather than retroactive. An estimate
+  that cannot be obtained fails closed. Chains with no limits skip the estimate
+  entirely, so the common unlimited-testnet path is unchanged.
 
 ## 1.1.0 — 2026-09-04
 

@@ -87,6 +87,19 @@ export class RulesEngine {
     return { approved: true };
   }
 
+  /**
+   * True when this chain has at least one finite spend limit configured.
+   *
+   * Callers use this to decide whether a cost estimate is worth obtaining
+   * before a write: with no limit to enforce there is nothing to compare
+   * against, so an unavailable estimate must not block the operation.
+   */
+  hasSpendLimits(chainId: number): boolean {
+    const limits = this.config.tx_rules?.limits?.[String(chainId)];
+    if (!limits) return false;
+    return Object.values(limits).some((v) => v !== 'unlimited');
+  }
+
   recordSpend(chainId: number, amount: number): void {
     if (this.spendStore) {
       this.spendStore.record(this.agentName, chainId, amount);

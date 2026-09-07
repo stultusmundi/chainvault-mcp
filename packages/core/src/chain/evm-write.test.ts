@@ -9,7 +9,11 @@ vi.mock('viem', async () => {
       waitForTransactionReceipt: vi.fn(async () => ({
         status: 'success',
         contractAddress: '0xNewContractAddress',
+        gasUsed: 1_000_000n,
+        effectiveGasPrice: 20_000_000_000n, // 20 gwei -> 0.02 ETH
       })),
+      estimateGas: vi.fn(async () => 1_500_000n),
+      getGasPrice: vi.fn(async () => 20_000_000_000n), // -> 0.03 ETH
     })),
     createWalletClient: vi.fn(() => ({
       deployContract: vi.fn(async () => '0xDeployTxHash'),
@@ -119,5 +123,33 @@ describe('EvmAdapter - writeContract value forwarding (wei)', () => {
     expect(mockWalletClient.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({ value: undefined }),
     );
+  });
+});
+
+describe('EvmAdapter - deploy gas accounting', () => {
+  let adapter: EvmAdapter;
+
+  beforeEach(() => {
+    adapter = new EvmAdapter('https://rpc.example.com', 11155111);
+  });
+
+  it('reports the actual gas cost of a deploy from the receipt', async () => {
+    const result = await adapter.deployContract({
+      abi: [{ inputs: [], stateMutability: 'nonpayable', type: 'constructor' }],
+      bytecode: '0x608060405260405161083e',
+      privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+    });
+    expect(result.gasUsed).toBe('1000000');
+    expect(result.gasCostEth).toBe('0.02');
+  });
+
+  it('estimates deploy cost without needing a private key', async () => {
+    const estimate = await adapter.estimateDeployCost({
+      abi: [{ inputs: [], stateMutability: 'nonpayable', type: 'constructor' }],
+      bytecode: '0x608060405260405161083e',
+      account: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+    });
+    expect(estimate.gasLimit).toBe('1500000');
+    expect(estimate.estimatedCostEth).toBe('0.03');
   });
 });

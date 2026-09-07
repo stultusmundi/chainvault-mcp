@@ -65,6 +65,23 @@ export interface DeployParams {
   privateKey: string;
 }
 
+export interface DeployResult {
+  hash: string;
+  address?: string;
+  /** Gas units consumed, from the receipt. Absent if the node omits it. */
+  gasUsed?: string;
+  /** Actual gas cost in native token (gasUsed x effectiveGasPrice). */
+  gasCostEth?: string;
+}
+
+export interface EstimateDeployCostParams {
+  abi: readonly any[];
+  bytecode: string;
+  args?: any[];
+  /** Public address the deploy would be sent from. No private key needed. */
+  account: string;
+}
+
 export interface WriteContractParams {
   address: string;
   abi: readonly any[];
@@ -85,6 +102,7 @@ export interface ChainAdapter {
   getEvents(params: EventParams): Promise<any[]>;
   getTransaction(hash: string): Promise<TransactionResult>;
   estimateGas(params: EstimateGasParams): Promise<GasEstimate>;
-  deployContract(params: DeployParams): Promise<{ hash: string; address?: string }>;
+  deployContract(params: DeployParams): Promise<DeployResult>;
+  estimateDeployCost(params: EstimateDeployCostParams): Promise<GasEstimate>;
   writeContract(params: WriteContractParams): Promise<{ hash: string }>;
 }

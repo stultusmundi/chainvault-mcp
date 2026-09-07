@@ -162,6 +162,31 @@ describe('RulesEngine', () => {
     });
   });
 
+  describe('hasSpendLimits', () => {
+    it('is true when a chain has a finite limit', () => {
+      const engine = new RulesEngine(DEPLOYER_CONFIG);
+      expect(engine.hasSpendLimits(11155111)).toBe(true);
+    });
+
+    it('is false when a chain has no limits entry', () => {
+      const engine = new RulesEngine(DEPLOYER_CONFIG);
+      expect(engine.hasSpendLimits(999)).toBe(false);
+    });
+
+    it('is false when every limit for the chain is unlimited', () => {
+      const engine = new RulesEngine({
+        ...DEPLOYER_CONFIG,
+        tx_rules: {
+          allowed_types: ['deploy'],
+          limits: {
+            '11155111': { max_per_tx: 'unlimited', daily_limit: 'unlimited', monthly_limit: 'unlimited' },
+          },
+        },
+      });
+      expect(engine.hasSpendLimits(11155111)).toBe(false);
+    });
+  });
+
   describe('checkApiRequest', () => {
     it('approves a valid API request', () => {
       const engine = new RulesEngine(DEPLOYER_CONFIG);

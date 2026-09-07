@@ -79,6 +79,51 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
         return { content: [{ type: 'text' as const, text: err }] };
       }
 
+      const adapter = EvmAdapter.fromChainId(chain_id, ctx!.getRpcUrlForChain(chain_id) ?? undefined);
+      let parsedAbi: unknown;
+      try {
+        parsedAbi = JSON.parse(abi);
+      } catch (e: unknown) {
+        audit({ action: 'deploy_contract', chain_id, status: 'denied', details: 'Invalid ABI JSON' });
+        return { content: [{ type: 'text' as const, text: `Invalid ABI JSON: ${sanitizeError(e)}` }] };
+      }
+
+      // A deploy carries no `value`, so gas is its entire cost. Estimate that
+      // cost from the agent's public address and re-check it against the spend
+      // limits before any key is fetched — otherwise the limit is only enforced
+      // retroactively and a single deploy can overshoot it.
+      if (ctx!.rules.hasSpendLimits(chain_id)) {
+        const agentKey = ctx!.keys.find((k) => k.chains.includes(chain_id));
+        if (!agentKey) {
+          audit({ action: 'deploy_contract', chain_id, status: 'denied', details: 'No key for chain' });
+          return { content: [{ type: 'text' as const, text: `No key available for chain ${chain_id}.` }] };
+        }
+
+        let estimatedCostEth: string;
+        try {
+          const estimate = await adapter.estimateDeployCost({
+            abi: parsedAbi as readonly unknown[],
+            bytecode,
+            args: constructor_args,
+            account: agentKey.address,
+          });
+          estimatedCostEth = estimate.estimatedCostEth;
+        } catch (e: unknown) {
+          // Fail closed: a spend limit that cannot be evaluated must not be
+          // treated as satisfied. A failing estimate usually also means the
+          // deploy itself would revert.
+          const detail = `Could not estimate deploy cost, and chain ${chain_id} has a spend limit to enforce: ${sanitizeError(e)}`;
+          audit({ action: 'deploy_contract', chain_id, status: 'denied', details: detail });
+          return { content: [{ type: 'text' as const, text: detail }] };
+        }
+
+        const costErr = checkWriteAccess(ctx, chain_id, 'deploy', estimatedCostEth);
+        if (costErr) {
+          audit({ action: 'deploy_contract', chain_id, status: 'denied', details: costErr });
+          return { content: [{ type: 'text' as const, text: costErr }] };
+        }
+      }
+
       const privateKey = ctx!.getPrivateKeyForChain(chain_id);
       if (!privateKey) {
         audit({ action: 'deploy_contract', chain_id, status: 'denied', details: 'No key for chain' });
@@ -86,21 +131,21 @@ export function registerChainTools(server: McpServer, getContext: ContextGetter,
       }
 
       try {
-        const adapter = EvmAdapter.fromChainId(chain_id, ctx!.getRpcUrlForChain(chain_id) ?? undefined);
-        const parsedAbi = JSON.parse(abi);
         const result = await adapter.deployContract({
-          abi: parsedAbi,
+          abi: parsedAbi as readonly any[],
           bytecode,
           args: constructor_args,
           privateKey,
         });
-        // Record spend for limit tracking
-        ctx!.rules.recordSpend(chain_id, 0);
+        // Charge the deploy's actual gas cost against the agent's limits.
+        ctx!.rules.recordSpend(chain_id, parseFloat(result.gasCostEth ?? '0'));
         audit({ action: 'deploy_contract', chain_id, status: 'approved', details: `Deployed: ${result.hash}` });
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({
             hash: result.hash,
             contractAddress: result.address ?? null,
+            gasUsed: result.gasUsed ?? null,
+            gasCostEth: result.gasCostEth ?? null,
           }, null, 2) }],
         };
       } catch (e: unknown) {

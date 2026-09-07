@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, webSocket, fallback, formatEther, formatGwei, defineChain, type PublicClient, type Transport } from 'viem';
+import { createPublicClient, createWalletClient, http, webSocket, fallback, formatEther, formatGwei, encodeDeployData, defineChain, type PublicClient, type Transport } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { getChainConfig, type ChainConfig } from './chains.js';
 import type {
@@ -12,6 +12,8 @@ import type {
   GasEstimate,
   EstimateGasParams,
   DeployParams,
+  DeployResult,
+  EstimateDeployCostParams,
   WriteContractParams,
 } from './types.js';
 
@@ -172,7 +174,31 @@ export class EvmAdapter implements ChainAdapter {
     };
   }
 
-  async deployContract(params: DeployParams): Promise<{ hash: string; address?: string }> {
+  /**
+   * Estimates what a deploy would cost, using only the sender's public address.
+   * Runs before the private key is fetched, so spend limits can be enforced
+   * without decrypting anything.
+   */
+  async estimateDeployCost(params: EstimateDeployCostParams): Promise<GasEstimate> {
+    const data = encodeDeployData({
+      abi: params.abi,
+      bytecode: params.bytecode as `0x${string}`,
+      args: params.args ?? [],
+    });
+    const gasLimit = await this.client.estimateGas({
+      account: params.account as `0x${string}`,
+      data,
+    });
+    const gasPrice = await this.client.getGasPrice();
+
+    return {
+      gasLimit: gasLimit.toString(),
+      gasPriceGwei: formatGwei(gasPrice),
+      estimatedCostEth: formatEther(gasLimit * gasPrice),
+    };
+  }
+
+  async deployContract(params: DeployParams): Promise<DeployResult> {
     try {
       const account = privateKeyToAccount(params.privateKey as `0x${string}`);
       const chain = this.getChain();
@@ -192,9 +218,17 @@ export class EvmAdapter implements ChainAdapter {
 
       const receipt = await this.client.waitForTransactionReceipt({ hash });
 
+      // Deployments carry no `value`, so gas is their entire cost. Reporting it
+      // lets the caller charge the deploy against the agent's spend limits
+      // instead of recording it as free.
+      const { gasUsed, effectiveGasPrice } = receipt;
+      const hasCost = typeof gasUsed === 'bigint' && typeof effectiveGasPrice === 'bigint';
+
       return {
         hash,
         address: receipt.contractAddress ?? undefined,
+        gasUsed: typeof gasUsed === 'bigint' ? gasUsed.toString() : undefined,
+        gasCostEth: hasCost ? formatEther(gasUsed * effectiveGasPrice) : undefined,
       };
     } finally {
       params.privateKey = '';
