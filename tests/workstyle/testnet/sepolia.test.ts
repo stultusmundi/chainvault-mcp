@@ -46,7 +46,10 @@ describe.skipIf(!ready)('Sepolia live smoke', () => {
       agents: [{
         name: 'testnet-agent',
         chains: [SEPOLIA],
-        limits: { [String(SEPOLIA)]: { max_per_tx: '0.005', daily_limit: '0.01', monthly_limit: '0.05' } },
+        // Deploy gas now counts against these limits, and Sepolia gas prices
+        // swing. Keep the ceiling well above a realistic deploy (~1M gas) so a
+        // busy network fails the run for a real reason, not for a gas spike.
+        limits: { [String(SEPOLIA)]: { max_per_tx: '0.05', daily_limit: '0.1', monthly_limit: '0.5' } },
         grantApis: process.env.ETHERSCAN_API_KEY ? ['etherscan'] : [],
       }],
     });
