@@ -200,3 +200,70 @@ describe('ApiProxy', () => {
     ).rejects.toThrow('403');
   });
 });
+
+describe('ApiProxy POST', () => {
+  let proxy: ApiProxy;
+
+  beforeEach(() => {
+    proxy = new ApiProxy();
+    mockFetch.mockReset();
+  });
+
+  it('sends a form-encoded body and keeps the API key out of the URL', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ status: '1', result: 'GUID' }) });
+
+    await proxy.request({
+      agentId: 'a',
+      baseUrl: 'https://api.etherscan.io/v2/api',
+      endpoint: '',
+      method: 'POST',
+      params: { chainid: '11155111', module: 'contract', action: 'verifysourcecode' },
+      apiKey: 'SECRET_KEY',
+    });
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(String(url)).toBe('https://api.etherscan.io/v2/api');
+    expect(String(url)).not.toContain('SECRET_KEY');
+    expect(init.method).toBe('POST');
+    expect(init.headers['Content-Type']).toBe('application/x-www-form-urlencoded');
+    expect(String(init.body)).toContain('action=verifysourcecode');
+    expect(String(init.body)).toContain('apikey=SECRET_KEY');
+  });
+
+  it('never serves a POST from cache', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ result: 'GUID' }) });
+
+    const params = {
+      agentId: 'a',
+      baseUrl: 'https://api.etherscan.io/v2/api',
+      endpoint: '',
+      method: 'POST' as const,
+      params: { action: 'verifysourcecode' },
+      apiKey: 'K',
+    };
+
+    await proxy.request(params);
+    await proxy.request(params);
+
+    // A verification submission is not idempotent — replaying a cached
+    // response would report a stale GUID for a submission never made.
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('still enforces rate limits on POST', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ result: 'ok' }) });
+
+    const params = {
+      agentId: 'a',
+      baseUrl: 'https://api.etherscan.io/v2/api',
+      endpoint: '',
+      method: 'POST' as const,
+      params: { action: 'verifysourcecode' },
+      apiKey: 'K',
+      rateLimits: { per_second: 1, daily: 1000 },
+    };
+
+    await proxy.request(params);
+    await expect(proxy.request(params)).rejects.toThrow('Rate limit exceeded');
+  });
+});

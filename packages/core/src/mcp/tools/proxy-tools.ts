@@ -4,12 +4,11 @@ import { registerTool } from './register.js';
 import type { AgentContext } from '../context.js';
 import type { AuditFn } from '../audit-fn.js';
 import { getExplorerApiUrl } from '../../chain/chains.js';
-import { ApiProxy } from '../../proxy/api-proxy.js';
+import { apiProxy } from './shared-proxy.js';
 import { sanitizeError } from './sanitize.js';
 
 type ContextGetter = () => AgentContext | null;
 
-const proxy = new ApiProxy();
 const noop: AuditFn = () => {};
 
 export function registerProxyTools(server: McpServer, getContext: ContextGetter, audit: AuditFn = noop): void {
@@ -59,7 +58,7 @@ export function registerProxyTools(server: McpServer, getContext: ContextGetter,
       const rateLimits = ctx.config.api_access[serviceName]?.rate_limit;
 
       try {
-        const result = await proxy.request({
+        const result = await apiProxy.request({
           agentId: ctx.agentName,
           // explorerApiUrl already includes the /v2/api path.
           baseUrl: explorerApiUrl,

@@ -36,6 +36,7 @@ function createApprovedContext(): AgentContext {
     config: {} as AgentContext['config'],
     rules: {
       checkTxRequest: () => ({ approved: true }),
+      checkApiRequest: () => ({ approved: true }),
       recordSpend: vi.fn(),
     } as unknown as AgentContext['rules'],
     keys: [{ name: 'k', address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', chains: [11155111] }],
@@ -251,5 +252,92 @@ describe('simulate_transaction error sanitization', () => {
     const text = result.content[0].text as string;
     expect(text).not.toContain('SECRETKEY123');
     expect(text).toContain('https://[REDACTED]');
+  });
+});
+
+describe('verify_contract access control', () => {
+  const fetchMock = vi.fn();
+
+  const VERIFY_ARGS = {
+    chain_id: 11155111,
+    address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
+    source_code: 'contract C {}',
+    contract_name: 'C',
+    compiler_version: '0.8.24',
+  };
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ status: '1', result: 'GUID' }) });
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function verifyCtx(overrides: Partial<AgentContext> = {}): AgentContext {
+    return {
+      ...createApprovedContext(),
+      config: {
+        api_access: { etherscan: { allowed_endpoints: ['*'], rate_limit: { per_second: 5, daily: 100 } } },
+      } as unknown as AgentContext['config'],
+      getApiKeyForExplorer: () => ({ serviceName: 'etherscan', key: 'SECRET_KEY' }),
+      ...overrides,
+    };
+  }
+
+  it('denies verification on a chain the agent cannot access', async () => {
+    const server = createFakeServer();
+    const ctx = verifyCtx({
+      rules: {
+        checkTxRequest: () => ({ approved: false, reason: 'Agent does not have access to chain 11155111' }),
+        checkApiRequest: () => ({ approved: true }),
+        recordSpend: vi.fn(),
+        hasSpendLimits: () => false,
+      } as unknown as AgentContext['rules'],
+    });
+    registerChainTools(server as any, () => ctx);
+
+    const res = await server.handlers.get('verify_contract')!(VERIFY_ARGS);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.content[0].text).toMatch(/does not have access to chain/i);
+  });
+
+  it('denies verification when the API endpoint is not whitelisted', async () => {
+    const server = createFakeServer();
+    const ctx = verifyCtx({
+      rules: {
+        checkTxRequest: () => ({ approved: true }),
+        checkApiRequest: () => ({ approved: false, reason: "Endpoint 'verifysourcecode' is not in the allowed endpoint list" }),
+        recordSpend: vi.fn(),
+        hasSpendLimits: () => false,
+      } as unknown as AgentContext['rules'],
+    });
+    registerChainTools(server as any, () => ctx);
+
+    const res = await server.handlers.get('verify_contract')!(VERIFY_ARGS);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.content[0].text).toMatch(/verifysourcecode/);
+  });
+
+  it('enforces the agent rate limit, so verification cannot bypass the proxy', async () => {
+    const server = createFakeServer();
+    const ctx = verifyCtx({
+      agentName: 'rate-limited-agent',
+      config: {
+        api_access: { etherscan: { allowed_endpoints: ['*'], rate_limit: { per_second: 1, daily: 100 } } },
+      } as unknown as AgentContext['config'],
+    });
+    registerChainTools(server as any, () => ctx);
+
+    const handler = server.handlers.get('verify_contract')!;
+    await handler(VERIFY_ARGS);
+    const res = await handler(VERIFY_ARGS);
+
+    expect(res.content[0].text).toMatch(/rate limit exceeded/i);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
